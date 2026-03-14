@@ -11,7 +11,7 @@
 
 /* Header styles */
 header {
-    @apply py-2 px-4 flex justify-between items-center shadow-md;
+    @apply py-2 px-4 flex flex-col justify-between items-center shadow-md;
     background-color: hsl(var(--card));
     color: hsl(var(--card-foreground));
     /* Ensure header is always on top and clickable */
