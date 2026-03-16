@@ -534,6 +534,21 @@ static void *mp4_writer_rtsp_thread(void *arg) {
                         (unsigned long long)size_bytes);
             }
         }
+
+        // BUGFIX (#315): Guarantee a new segment is created on the next loop
+        // iteration, even when record_segment exits up to 1 second early (the
+        // "within 1 second of duration limit" optimisation in mp4_segment_recorder.c
+        // sets waiting_for_final_keyframe at elapsed >= duration-1).  Without this,
+        // the wall-clock elapsed_time check at the top of the loop sees
+        // (segment_duration - 1) < segment_duration and skips rotation, so
+        // record_segment is called again with the *same* output path, truncating
+        // and overwriting the just-completed recording.
+        //
+        // Setting last_rotation_time to exactly segment_duration seconds in the
+        // past ensures elapsed_time >= segment_duration on the very next check.
+        if (thread_ctx->writer && segment_duration > 0) {
+            thread_ctx->writer->last_rotation_time = time(NULL) - segment_duration;
+        }
     }
 
 thread_cleanup:
