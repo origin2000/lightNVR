@@ -294,8 +294,14 @@ static void *mp4_recording_thread(void *arg) {
     // Dead-detection state for the inner RTSP writer thread
     int dead_check_seconds  = 0;   // consecutive seconds mp4_writer_is_recording() == 0
     int self_restart_count  = 0;   // how many self-heals we've attempted
+    int healthy_seconds     = 0;   // consecutive healthy seconds (used to reset self_restart_count)
     const int DEAD_RESTART_THRESHOLD_SECS = 5;
     const int MAX_SELF_RESTARTS           = 5;
+    // After MAX_SELF_RESTARTS consecutive failures the outer thread enters a
+    // cooldown instead of permanently giving up.  This prevents a single bad
+    // stream (404, flaky HEVC, etc.) from leaving recording dead forever and
+    // avoids triggering a container restart via an external health-check.
+    const int COOLDOWN_SECS               = 300; // 5-minute cooldown before retry
 
     // Main loop to monitor the recording thread
     while (ctx->running && !shutdown_in_progress) {
@@ -314,10 +320,61 @@ static void *mp4_recording_thread(void *arg) {
                 dead_check_seconds++;
                 if (dead_check_seconds >= DEAD_RESTART_THRESHOLD_SECS) {
                     if (self_restart_count >= MAX_SELF_RESTARTS) {
-                        log_error("Inner RTSP thread for stream %s dead for %d+ s, already restarted %d times — giving up",
-                                  stream_name, dead_check_seconds, self_restart_count);
-                        ctx->running = 0;
-                        break;
+                        // Instead of giving up permanently, enter a cooldown and
+                        // try again.  This keeps the outer thread alive so that a
+                        // transient camera/restreamer problem (404, flaky HEVC,
+                        // network blip) doesn't permanently stop recording and
+                        // doesn't force a container restart.
+                        log_warn("Stream %s: inner RTSP thread failed %d times in a row. "
+                                 "Entering %d-second cooldown before next attempt.",
+                                 stream_name, self_restart_count, COOLDOWN_SECS);
+
+                        // Stop the stalled inner thread cleanly before sleeping.
+                        mp4_writer_stop_recording_thread(ctx->mp4_writer);
+
+                        // Sleep through the cooldown, waking every second to
+                        // check for shutdown so we don't block a clean exit.
+                        for (int cd = 0; cd < COOLDOWN_SECS; cd++) {
+                            if (!ctx->running || shutdown_in_progress ||
+                                is_shutdown_initiated()) {
+                                ctx->running = 0;
+                                break;
+                            }
+                            sleep(1);
+                        }
+
+                        if (!ctx->running || shutdown_in_progress) {
+                            break;
+                        }
+
+                        // Reset counters and refresh the URL before retrying.
+                        self_restart_count = 0;
+                        dead_check_seconds = 0;
+                        healthy_seconds    = 0;
+
+                        if (using_go2rtc) {
+                            char fresh_url[MAX_PATH_LENGTH];
+                            if (go2rtc_get_rtsp_url(stream_name, fresh_url, sizeof(fresh_url))) {
+                                strncpy(restart_url, fresh_url, sizeof(restart_url) - 1);
+                                restart_url[sizeof(restart_url) - 1] = '\0';
+                                log_info("Refreshed go2rtc URL for stream %s after cooldown",
+                                         stream_name);
+                            }
+                        }
+
+                        int cooldown_ret = mp4_writer_start_recording_thread(
+                                ctx->mp4_writer, restart_url);
+                        if (cooldown_ret < 0) {
+                            log_error("Failed to restart inner RTSP thread for "
+                                      "stream %s after cooldown — giving up",
+                                      stream_name);
+                            ctx->running = 0;
+                            break;
+                        }
+
+                        log_info("Stream %s: inner RTSP thread restarted after cooldown",
+                                 stream_name);
+                        continue;
                     }
 
                     log_warn("Inner RTSP thread for stream %s dead for %d+ s, restarting (attempt %d/%d)",
@@ -349,10 +406,25 @@ static void *mp4_recording_thread(void *arg) {
                     log_info("Inner RTSP thread for stream %s restarted successfully", stream_name);
                     self_restart_count++;
                     dead_check_seconds = 0;
+                    healthy_seconds    = 0;
                 }
             } else {
-                // Thread is healthy — clear the stale-detection counter
+                // Thread is healthy — clear the stale-detection counters.
+                if (dead_check_seconds > 0) {
+                    log_info("Stream %s: recording thread recovered after %d dead seconds",
+                             stream_name, dead_check_seconds);
+                }
                 dead_check_seconds = 0;
+                healthy_seconds++;
+
+                // After 2 minutes of sustained healthy recording, reset the
+                // restart counter so a stream that had a brief outage doesn't
+                // accumulate toward the cooldown limit indefinitely.
+                if (healthy_seconds >= 120 && self_restart_count > 0) {
+                    log_info("Stream %s: stable for %d s, resetting restart counter (was %d)",
+                             stream_name, healthy_seconds, self_restart_count);
+                    self_restart_count = 0;
+                }
             }
         }
     }
