@@ -16,6 +16,8 @@
 #include "video/detection.h"
 #include "video/detection_result.h"
 #include "video/stream_manager.h"
+#include "video/go2rtc/go2rtc_integration.h"
+#include "video/unified_detection_thread.h"
 #include "database/database_manager.h"
 
 // Minimum/default window for live-view detection queries (seconds).
@@ -132,7 +134,38 @@ void handle_get_detection_results(const http_request_t *req, http_response_t *re
     const struct tm *tm_info = localtime_r(&now, &tm_buf);
     strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", tm_info);
     cJSON_AddStringToObject(response, "timestamp", timestamp);
-    
+
+    // Resolve and add stream status so clients can display connectivity state
+    // without requiring a separate /api/streams poll.
+    {
+        const char *status_str = "Unknown";
+        stream_handle_t sh = get_stream_by_name(stream_name);
+        if (sh) {
+            stream_config_t scfg;
+            memset(&scfg, 0, sizeof(scfg));
+            if (get_stream_config(sh, &scfg) == 0) {
+                stream_status_t ss = get_stream_status(sh);
+                // Mirror resolve_effective_stream_status() from api_handlers_streams_get.c:
+                // When go2rtc manages streams the state-manager stays STOPPED; consult UDT.
+                if (ss == STREAM_STATUS_STOPPED && scfg.enabled
+                        && go2rtc_integration_is_initialized()) {
+                    stream_status_t udt = get_unified_detection_effective_status(stream_name);
+                    ss = (udt != STREAM_STATUS_STOPPED) ? udt : STREAM_STATUS_RUNNING;
+                }
+                switch (ss) {
+                    case STREAM_STATUS_STOPPED:      status_str = "Stopped";      break;
+                    case STREAM_STATUS_STARTING:     status_str = "Starting";     break;
+                    case STREAM_STATUS_RUNNING:      status_str = "Running";      break;
+                    case STREAM_STATUS_STOPPING:     status_str = "Stopping";     break;
+                    case STREAM_STATUS_ERROR:        status_str = "Error";        break;
+                    case STREAM_STATUS_RECONNECTING: status_str = "Reconnecting"; break;
+                    default:                         status_str = "Unknown";      break;
+                }
+            }
+        }
+        cJSON_AddStringToObject(response, "stream_status", status_str);
+    }
+
     // Add each detection to the array
     for (int i = 0; i < result.count; i++) {
         cJSON *detection = cJSON_CreateObject();

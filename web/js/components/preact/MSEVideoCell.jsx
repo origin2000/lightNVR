@@ -46,6 +46,9 @@ export function MSEVideoCell({
   const autoRetryTimeoutRef = useRef(null);
   const MAX_AUTO_RETRIES = 3; // auto-retry up to 3 times before showing error
 
+  // Track previous stream status so we can detect transitions to 'Running'
+  const prevStatusRef = useRef(stream.status);
+
   // PTZ controls state
   const [showPTZControls, setShowPTZControls] = useState(false);
 
@@ -451,6 +454,20 @@ export function MSEVideoCell({
       cleanup();
     };
   }, [stream?.name, retryCount, initDelay]);
+
+  // Auto-retry when stream status transitions back to 'Running' while the
+  // error overlay is visible (e.g. camera came back online after an outage).
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = stream.status;
+    if (error && stream.status === 'Running' && prev !== 'Running') {
+      console.log(`[MSE ${stream.name}] Status changed to Running — auto-retrying after error`);
+      autoRetryCountRef.current = 0;
+      setError(null);
+      setIsLoading(true);
+      setRetryCount(c => c + 1);
+    }
+  }, [stream.status, error]);
 
   // Video element event handlers — go2rtc closes WS on video error to trigger reconnect
   useEffect(() => {

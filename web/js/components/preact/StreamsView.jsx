@@ -1490,7 +1490,7 @@ export function StreamsView() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <span className="w-2 h-2 rounded-full mr-2 flex-shrink-0" style={{backgroundColor: stream.enabled ? 'hsl(var(--success))' : 'hsl(var(--danger))'}}></span>
+                          <span className="w-2 h-2 rounded-full mr-2 flex-shrink-0" style={{backgroundColor: stream.enabled ? 'hsl(var(--success))' : 'hsl(var(--danger))'}} title={stream.enabled ? t('common.enabled') : t('common.disabled')}></span>
                           {stream.name}
                         </div>
                       </td>

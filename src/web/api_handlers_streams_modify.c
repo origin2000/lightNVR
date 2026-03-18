@@ -53,6 +53,7 @@ typedef struct {
     bool has_record;                           // Whether record flag was provided
     bool has_streaming_enabled;                // Whether streaming_enabled flag was provided
     bool non_dynamic_config_changed;           // Whether non-dynamic fields changed
+    bool credentials_changed;                  // Whether ONVIF credentials changed
 } put_stream_task_t;
 
 static void format_stream_capacity_error(char *buf, size_t buf_size,
@@ -341,9 +342,9 @@ static void put_stream_worker(put_stream_task_t *task) {
             }
         }
 
-        // If URL, protocol, or record_audio changed, update go2rtc stream registration
-        if ((url_changed || protocol_changed || record_audio_changed)) {
-            log_info("URL, protocol, or record_audio changed for stream %s, updating go2rtc registration", task->config.name);
+        // If URL, protocol, record_audio, or credentials changed, update go2rtc stream registration
+        if ((url_changed || protocol_changed || record_audio_changed || task->credentials_changed)) {
+            log_info("URL, protocol, record_audio, or credentials changed for stream %s, updating go2rtc registration", task->config.name);
 
             if (go2rtc_integration_reload_stream_config(task->config.name, task->config.url,
                                                         task->config.onvif_username[0] != '\0' ? task->config.onvif_username : NULL,
@@ -887,6 +888,7 @@ void handle_put_stream(const http_request_t *req, http_response_t *res) {
     bool has_record = false;  // Track if record flag was provided
     bool has_streaming_enabled = false;  // Track if streaming_enabled flag was provided
     bool non_dynamic_config_changed = false;  // Track if non-dynamic fields changed
+    bool credentials_changed = false;  // Track if ONVIF credentials changed
 
     // Save original values for comparison
     char original_url[MAX_URL_LENGTH];
@@ -1290,6 +1292,14 @@ void handle_put_stream(const http_request_t *req, http_response_t *res) {
     bool onvif_test_success = true;
     bool onvif_test_performed = false;
 
+    // Save original credentials before any update so we can detect changes
+    char original_onvif_username[sizeof(config.onvif_username)];
+    char original_onvif_password[sizeof(config.onvif_password)];
+    strncpy(original_onvif_username, config.onvif_username, sizeof(original_onvif_username) - 1);
+    original_onvif_username[sizeof(original_onvif_username) - 1] = '\0';
+    strncpy(original_onvif_password, config.onvif_password, sizeof(original_onvif_password) - 1);
+    original_onvif_password[sizeof(original_onvif_password) - 1] = '\0';
+
     if (config.is_onvif) {
         log_info("Testing ONVIF capabilities for stream %s", config.name);
         onvif_test_performed = true;
@@ -1309,6 +1319,16 @@ void handle_put_stream(const http_request_t *req, http_response_t *res) {
         }
 
         normalize_stream_url_credentials(&config);
+
+        // Detect if credentials actually changed (after normalisation) and mark for restart + go2rtc reload
+        if (strcmp(original_onvif_username, config.onvif_username) != 0 ||
+            strcmp(original_onvif_password, config.onvif_password) != 0) {
+            credentials_changed = true;
+            config_changed = true;
+            requires_restart = true;
+            non_dynamic_config_changed = true;
+            log_info("ONVIF credentials changed for stream %s - restart and go2rtc reload required", config.name);
+        }
 
         // Build ONVIF device URL, using onvif_port if specified
         char onvif_device_url[MAX_URL_LENGTH];
@@ -1439,6 +1459,7 @@ void handle_put_stream(const http_request_t *req, http_response_t *res) {
     task->has_record = has_record;
     task->has_streaming_enabled = has_streaming_enabled;
     task->non_dynamic_config_changed = non_dynamic_config_changed;
+    task->credentials_changed = credentials_changed;
 
     log_info("Detection settings before update - Model: %s, Threshold: %.2f, Interval: %d, Pre-buffer: %d, Post-buffer: %d",
              config.detection_model, config.detection_threshold, config.detection_interval,

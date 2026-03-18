@@ -180,7 +180,8 @@ export function LiveView({isWebRTCDisabled}) {
     checkGo2rtcMode();
   }, []);
 
-  // Fetch streams using preact-query
+  // Fetch streams using preact-query, and periodically refresh so stream
+  // status (Running / Reconnecting / Stopped etc.) stays up-to-date.
   const {
     data: streamsData,
     isLoading: isLoadingStreams,
@@ -192,6 +193,9 @@ export function LiveView({isWebRTCDisabled}) {
       timeout: 15000, // 15 second timeout
       retries: 2,     // Retry twice
       retryDelay: 1000 // 1 second between retries
+    },
+    {
+      refetchInterval: 30000 // Re-poll stream list (and status) every 30 s
     }
   );
 

@@ -65,6 +65,7 @@ export function HLSVideoCell({
   const fatalErrorCountRef = useRef(0);  // Track consecutive fatal error recovery attempts
   const recoveringRef = useRef(false);   // True when we're in the middle of error recovery (prevents counter reset)
   const hlsUrlRef = useRef(null);        // Master manifest URL — stored for session-expiry recovery
+  const prevStatusRef = useRef(stream.status); // Track previous stream status for transition detection
 
   /**
    * Refresh the stream's go2rtc registration
@@ -486,6 +487,22 @@ export function HLSVideoCell({
       }
     };
   }, [stream, retryCount, initDelay, hlsMode, t]);
+
+  // Auto-retry when stream status transitions back to 'Running' while the
+  // error overlay is visible (e.g. camera came back online after an outage).
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = stream.status;
+    if (error && stream.status === 'Running' && prev !== 'Running') {
+      console.log(`[HLS ${stream.name}] Status changed to Running — auto-retrying after error`);
+      fatalErrorCountRef.current = 0;
+      recoveringRef.current = false;
+      setError(null);
+      setIsLoading(true);
+      setIsPlaying(false);
+      setRetryCount(c => c + 1);
+    }
+  }, [stream.status, error]);
 
   // Handle retry button click
   const handleRetry = async () => {
