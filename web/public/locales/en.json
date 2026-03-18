@@ -374,6 +374,7 @@
   "live.noStreamsConfigured": "No streams configured",
   "live.configureStreams": "Configure Streams",
   "system.sections": "System sections",
+  "recordings.views": "Recordings views",
   "system.system": "System",
   "system.versions": "Versions",
   "system.restart": "Restart",

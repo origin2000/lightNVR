@@ -864,57 +864,57 @@ export function RecordingsView() {
   return (
     <section id="recordings-page" class="page">
       <div class="page-header flex justify-between items-center mb-4 p-4 bg-card text-card-foreground rounded-lg shadow">
-        <div class="flex items-center">
-          <h2 class="text-xl font-bold">{t('nav.recordings')}</h2>
-          <div class="ml-4 flex">
+        <h2 class="text-xl font-bold">{t('nav.recordings')}</h2>
+        {/* Right: contextual action — only shown when recordings are selected */}
+        {getSelectedCount() > 0 && (
+          <button
+            onClick={viewSelectedInTimeline}
+            class="btn-primary text-sm"
+            title={t('recordings.viewSelectedCountInTimeline', { count: getSelectedCount() })}
+          >
+            ▶ {t('nav.timeline')} ({getSelectedCount()})
+          </button>
+        )}
+      </div>
+
+      {/* Sub-navigation tabs — matches System page style */}
+      <div class="mb-4 border-b border-border" role="tablist" aria-label={t('recordings.views')}>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={viewMode === 'table'}
+            class={`rounded-t-lg px-4 py-2 text-sm font-medium transition-colors ${
+              viewMode === 'table'
+                ? 'bg-card text-card-foreground border border-border border-b-0 -mb-px'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => handleViewModeChange('table')}
+          >
+            {t('recordings.table')}
+          </button>
+          {thumbnailsEnabled && (
             <button
-              onClick={() => handleViewModeChange('table')}
-              class="px-3 py-1 rounded-l-md text-sm"
-              style={{
-                backgroundColor: viewMode === 'table' ? 'hsl(var(--primary))' : 'hsl(var(--secondary))',
-                color: viewMode === 'table' ? 'hsl(var(--primary-foreground))' : 'hsl(var(--secondary-foreground))'
-              }}
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'grid'}
+              class={`rounded-t-lg px-4 py-2 text-sm font-medium transition-colors ${
+                viewMode === 'grid'
+                  ? 'bg-card text-card-foreground border border-border border-b-0 -mb-px'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => handleViewModeChange('grid')}
             >
-              {t('recordings.table')}
+              {t('recordings.grid')}
             </button>
-            {thumbnailsEnabled && (
-              <button
-                onClick={() => handleViewModeChange('grid')}
-                class="px-3 py-1 text-sm"
-                style={{
-                  backgroundColor: viewMode === 'grid' ? 'hsl(var(--primary))' : 'hsl(var(--secondary))',
-                  color: viewMode === 'grid' ? 'hsl(var(--primary-foreground))' : 'hsl(var(--secondary-foreground))'
-                }}
-              >
-                {t('recordings.grid')}
-              </button>
-            )}
-            <a
-              href="timeline.html"
-              class={`px-3 py-1 text-sm ${getSelectedCount() > 0 ? '' : 'rounded-r-md'}`}
-              style={{
-                backgroundColor: 'hsl(var(--secondary))',
-                color: 'hsl(var(--secondary-foreground))'
-              }}
-              onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'hsl(var(--secondary) / 0.8)'}
-              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'hsl(var(--secondary))'}
-            >
-              {t('nav.timeline')}
-            </a>
-            {getSelectedCount() > 0 && (
-              <button
-                onClick={viewSelectedInTimeline}
-                class="px-3 py-1 rounded-r-md text-sm"
-                style={{
-                  backgroundColor: 'hsl(var(--primary))',
-                  color: 'hsl(var(--primary-foreground))'
-                }}
-                title={t('recordings.viewSelectedCountInTimeline', { count: getSelectedCount() })}
-              >
-                ▶ {t('nav.timeline')} ({getSelectedCount()})
-              </button>
-            )}
-          </div>
+          )}
+          {/* Timeline is a separate page — styled as a tab link for visual consistency */}
+          <a
+            href="timeline.html"
+            class="rounded-t-lg px-4 py-2 text-sm font-medium transition-colors text-muted-foreground hover:text-foreground"
+          >
+            {t('nav.timeline')}
+          </a>
         </div>
       </div>
 
