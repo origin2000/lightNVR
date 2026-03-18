@@ -77,20 +77,26 @@ export function WebRTCView() {
   // State for go2rtc availability (to show MSE View button)
   const [go2rtcAvailable, setGo2rtcAvailable] = useState(false);
 
-  // Initialize cols/rows from URL params, localStorage, or legacy layout key.
+  // Initialize cols/rows from URL params, shared localStorage key, or legacy per-view keys.
+  // All live views (WebRTC / HLS / MSE) share 'lightnvr-live-cols' / 'lightnvr-live-rows'
+  // so a layout change on one page carries over to the others.
   // autoGrid stays true when no preference exists — streams-load effect will
   // auto-size the grid to fit the available camera count.
   const [autoGrid, setAutoGrid] = useState(() => {
     const p = new URLSearchParams(window.location.search);
-    return p.get('cols') === null && localStorage.getItem('lightnvr-webrtc-cols') === null
+    return p.get('cols') === null
+      && localStorage.getItem('lightnvr-live-cols') === null
+      && localStorage.getItem('lightnvr-webrtc-cols') === null
       && localStorage.getItem('lightnvr-webrtc-layout') === null;
   });
   const [cols, setCols] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const cp = urlParams.get('cols');
     if (cp) return Math.max(1, Math.min(9, parseInt(cp, 10) || 2));
-    const stored = localStorage.getItem('lightnvr-webrtc-cols');
-    if (stored) return Math.max(1, Math.min(9, parseInt(stored, 10) || 2));
+    const shared = localStorage.getItem('lightnvr-live-cols');
+    if (shared) return Math.max(1, Math.min(9, parseInt(shared, 10) || 2));
+    const legacy = localStorage.getItem('lightnvr-webrtc-cols');
+    if (legacy) return Math.max(1, Math.min(9, parseInt(legacy, 10) || 2));
     const oldLayout = localStorage.getItem('lightnvr-webrtc-layout');
     if (oldLayout) return legacyLayoutToColsRowsWebRTC(oldLayout)[0];
     return 2; // placeholder until autoGrid resolves
@@ -99,8 +105,10 @@ export function WebRTCView() {
     const urlParams = new URLSearchParams(window.location.search);
     const rp = urlParams.get('rows');
     if (rp) return Math.max(1, Math.min(9, parseInt(rp, 10) || 2));
-    const stored = localStorage.getItem('lightnvr-webrtc-rows');
-    if (stored) return Math.max(1, Math.min(9, parseInt(stored, 10) || 2));
+    const shared = localStorage.getItem('lightnvr-live-rows');
+    if (shared) return Math.max(1, Math.min(9, parseInt(shared, 10) || 2));
+    const legacy = localStorage.getItem('lightnvr-webrtc-rows');
+    if (legacy) return Math.max(1, Math.min(9, parseInt(legacy, 10) || 2));
     const oldLayout = localStorage.getItem('lightnvr-webrtc-layout');
     if (oldLayout) return legacyLayoutToColsRowsWebRTC(oldLayout)[1];
     return 2; // placeholder until autoGrid resolves
@@ -262,8 +270,11 @@ export function WebRTCView() {
     // Persist to storage
     if (currentPage > 0) sessionStorage.setItem('webrtc_current_page', (currentPage + 1).toString());
     else sessionStorage.removeItem('webrtc_current_page');
-    localStorage.setItem('lightnvr-webrtc-cols', String(cols));
-    localStorage.setItem('lightnvr-webrtc-rows', String(rows));
+    localStorage.setItem('lightnvr-live-cols', String(cols));
+    localStorage.setItem('lightnvr-live-rows', String(rows));
+    // Clean up old per-view keys so reads don't fall back to stale values
+    localStorage.removeItem('lightnvr-webrtc-cols');
+    localStorage.removeItem('lightnvr-webrtc-rows');
     localStorage.removeItem('lightnvr-webrtc-layout');
     if (isSingleStream && selectedStream) sessionStorage.setItem('webrtc_selected_stream', selectedStream);
     else sessionStorage.removeItem('webrtc_selected_stream');

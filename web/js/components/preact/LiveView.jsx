@@ -83,20 +83,26 @@ export function LiveView({isWebRTCDisabled}) {
     return urlParams.get('mode') === 'mse';
   });
 
-  // Initialize cols/rows from URL params, localStorage, or legacy layout key.
+  // Initialize cols/rows from URL params, shared localStorage key, or legacy per-view keys.
+  // All live views (WebRTC / HLS / MSE) share 'lightnvr-live-cols' / 'lightnvr-live-rows'
+  // so a layout change on one page carries over to the others.
   // autoGrid stays true when no preference exists — streams-load effect will
   // auto-size the grid to fit the available camera count.
   const [autoGrid, setAutoGrid] = useState(() => {
     const p = new URLSearchParams(window.location.search);
-    return p.get('cols') === null && localStorage.getItem('lightnvr-hls-cols') === null
+    return p.get('cols') === null
+      && localStorage.getItem('lightnvr-live-cols') === null
+      && localStorage.getItem('lightnvr-hls-cols') === null
       && localStorage.getItem('lightnvr-hls-layout') === null;
   });
   const [cols, setCols] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const cp = urlParams.get('cols');
     if (cp) return Math.max(1, Math.min(9, parseInt(cp, 10) || 2));
-    const stored = localStorage.getItem('lightnvr-hls-cols');
-    if (stored) return Math.max(1, Math.min(9, parseInt(stored, 10) || 2));
+    const shared = localStorage.getItem('lightnvr-live-cols');
+    if (shared) return Math.max(1, Math.min(9, parseInt(shared, 10) || 2));
+    const legacy = localStorage.getItem('lightnvr-hls-cols');
+    if (legacy) return Math.max(1, Math.min(9, parseInt(legacy, 10) || 2));
     const oldLayout = localStorage.getItem('lightnvr-hls-layout');
     if (oldLayout) return legacyLayoutToColsRowsHLS(oldLayout)[0];
     return 2; // placeholder until autoGrid resolves
@@ -105,8 +111,10 @@ export function LiveView({isWebRTCDisabled}) {
     const urlParams = new URLSearchParams(window.location.search);
     const rp = urlParams.get('rows');
     if (rp) return Math.max(1, Math.min(9, parseInt(rp, 10) || 2));
-    const stored = localStorage.getItem('lightnvr-hls-rows');
-    if (stored) return Math.max(1, Math.min(9, parseInt(stored, 10) || 2));
+    const shared = localStorage.getItem('lightnvr-live-rows');
+    if (shared) return Math.max(1, Math.min(9, parseInt(shared, 10) || 2));
+    const legacy = localStorage.getItem('lightnvr-hls-rows');
+    if (legacy) return Math.max(1, Math.min(9, parseInt(legacy, 10) || 2));
     const oldLayout = localStorage.getItem('lightnvr-hls-layout');
     if (oldLayout) return legacyLayoutToColsRowsHLS(oldLayout)[1];
     return 2; // placeholder until autoGrid resolves
@@ -331,8 +339,11 @@ export function LiveView({isWebRTCDisabled}) {
     // Persist to storage
     if (currentPage > 0) sessionStorage.setItem('hls_current_page', (currentPage + 1).toString());
     else sessionStorage.removeItem('hls_current_page');
-    localStorage.setItem('lightnvr-hls-cols', String(cols));
-    localStorage.setItem('lightnvr-hls-rows', String(rows));
+    localStorage.setItem('lightnvr-live-cols', String(cols));
+    localStorage.setItem('lightnvr-live-rows', String(rows));
+    // Clean up old per-view keys so reads don't fall back to stale values
+    localStorage.removeItem('lightnvr-hls-cols');
+    localStorage.removeItem('lightnvr-hls-rows');
     localStorage.removeItem('lightnvr-hls-layout');
     if (isSingleStream && selectedStream) sessionStorage.setItem('hls_selected_stream', selectedStream);
     else sessionStorage.removeItem('hls_selected_stream');
