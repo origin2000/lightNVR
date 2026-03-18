@@ -157,10 +157,15 @@ export function RecordingsTable({
 
   return (
     <div className="recordings-container bg-card text-card-foreground rounded-lg shadow overflow-hidden w-full">
-      {/* Toolbar: batch actions + column config */}
-      <div className="px-3 py-2.5 border-b border-border flex items-center gap-2">
-        {/* Left: all action items — wraps on narrow screens without affecting the gear icon */}
-        <div className="flex flex-wrap gap-2 items-center flex-1 min-w-0">
+      {/* Toolbar: batch actions + column config.
+          Own overflow-x-auto context so the sidebar width never compresses the
+          button row — the toolbar scrolls horizontally rather than wrapping
+          at arbitrary container widths. The table has its own independent
+          overflow-x-auto below. */}
+      <div className="overflow-x-auto border-b border-border">
+        <div className="px-3 py-2.5 flex items-center gap-2 min-w-max">
+        {/* Left: action items */}
+        <div className="flex gap-2 items-center">
           {collapsed && (
             <button
               type="button"
@@ -241,6 +246,7 @@ export function RecordingsTable({
         {/* Right: column config gear — always pinned to the right, never wraps */}
         <div className="flex-shrink-0">
           <ColumnConfigDropdown hiddenColumns={hiddenColumns} toggleColumn={toggleColumn} />
+        </div>
         </div>
       </div>
       <div className="overflow-x-auto">

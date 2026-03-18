@@ -449,7 +449,9 @@ export function RecordingsGrid({
   return (
     <div class="recordings-container bg-card text-card-foreground rounded-lg shadow overflow-hidden w-full">
       {/* Toolbar */}
-      <div class="batch-actions px-3 py-2.5 border-b border-border flex flex-wrap gap-2 items-center">
+      <div class="batch-actions px-3 py-2.5 border-b border-border flex items-center gap-2">
+        {/* Left: action buttons — wraps on narrow screens without affecting the gear icon */}
+        <div class="flex flex-wrap gap-2 items-center flex-1 min-w-0">
         {collapsed && (
           <button
             type="button"
@@ -550,7 +552,9 @@ export function RecordingsGrid({
             )}
           </>
         )}
-        <div class="ml-auto">
+        </div>
+        {/* Right: card config gear — always pinned to the right, never wraps */}
+        <div class="flex-shrink-0">
           <CardConfigDropdown hiddenColumns={hiddenColumns} toggleColumn={toggleColumn} />
         </div>
       </div>
