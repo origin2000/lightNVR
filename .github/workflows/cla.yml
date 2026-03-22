@@ -8,7 +8,8 @@ on:
 
 permissions:
   actions: write
-  contents: read
+  contents: write
+  issues: write
   pull-requests: write
   statuses: write
 
@@ -26,7 +27,7 @@ jobs:
           path-to-signatures: '.github/cla-signatures.json'
           path-to-document: 'https://github.com/${{ github.repository }}/blob/main/CLA.md'
           branch: 'main'
-          allowlist: 'matteius,dependabot[bot],github-actions[bot]'
+          allowlist: 'matteius,dependabot[bot],github-actions[bot],Copilot,gtxaspec,wltechblog,nschimme,nomadhermit,gponick'
           
           # Custom messages
           custom-notsigned-prcomment: |
