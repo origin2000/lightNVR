@@ -7,21 +7,21 @@
  *  - reorderMode: boolean toggle – when true, drag handles are shown
  *  - drag handlers: onDragStart / onDragOver / onDrop / onDragEnd
  *
- * Order is keyed by view type ("webrtc" | "hls") and stored in
- * localStorage as an array of stream names.
+ * All live views (WebRTC / HLS / MSE) share a single storage key so that
+ * reordering on one page is reflected on all others.
  */
 
 import { useState, useCallback, useRef } from 'preact/hooks';
 
-const STORAGE_KEY_PREFIX = 'lightnvr-camera-order-';
+const STORAGE_KEY = 'lightnvr-camera-order';
 
 /**
  * Load persisted order from localStorage.
  * Returns an object mapping stream name → position index.
  */
-function loadOrder(viewType) {
+function loadOrder() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_PREFIX + viewType);
+    const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return {};
@@ -36,9 +36,9 @@ function loadOrder(viewType) {
 /**
  * Persist an ordered array of stream names to localStorage.
  */
-function saveOrder(viewType, names) {
+function saveOrder(names) {
   try {
-    localStorage.setItem(STORAGE_KEY_PREFIX + viewType, JSON.stringify(names));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(names));
   } catch { /* quota errors are non-fatal */ }
 }
 
@@ -60,11 +60,11 @@ function applyOrder(streams, orderMap) {
 
 /**
  * @param {Array}  streams  - the filtered streams array from LiveView / WebRTCView
- * @param {string} viewType - "webrtc" | "hls"
+ * @param {string} _viewType - ignored (kept for API compatibility); all views share one key
  */
-export function useCameraOrder(streams, viewType) {
+export function useCameraOrder(streams, _viewType) {
   // The persisted user-defined order (stream name → position index)
-  const [orderMap, setOrderMap] = useState(() => loadOrder(viewType));
+  const [orderMap, setOrderMap] = useState(() => loadOrder());
 
   // Whether the drag-reorder UI is active
   const [reorderMode, setReorderMode] = useState(false);
@@ -120,9 +120,9 @@ export function useCameraOrder(streams, viewType) {
     e.preventDefault();
     // Persist the current order
     const current = applyOrder(streams, orderRef.current);
-    saveOrder(viewType, current.map(s => s.name));
+    saveOrder(current.map(s => s.name));
     dragIndexRef.current = null;
-  }, [streams, viewType]);
+  }, [streams]);
 
   const handleDragEnd = useCallback(() => {
     dragIndexRef.current = null;
@@ -130,10 +130,10 @@ export function useCameraOrder(streams, viewType) {
 
   /** Clear persisted order and reset to server default */
   const resetOrder = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY_PREFIX + viewType);
+    localStorage.removeItem(STORAGE_KEY);
     setOrderMap({});
     setReorderMode(false);
-  }, [viewType]);
+  }, []);
 
   return {
     orderedStreams,
