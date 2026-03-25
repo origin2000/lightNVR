@@ -428,21 +428,22 @@ int set_stream_feature(stream_state_manager_t *state, const char *feature, bool 
         log_info("Feature '%s' %s for stream '%s'",
                 feature, enabled ? "enabled" : "disabled", state->name);
 
-        // If stream is active, apply the change
-        log_info("Stream '%s' current_state=%d (ACTIVE=%d), checking if we should apply feature change",
+        log_info("Stream '%s' current_state=%d (ACTIVE=%d), applying feature change",
                 state->name, current_state, STREAM_STATE_ACTIVE);
-        if (current_state == STREAM_STATE_ACTIVE) {
-            if (strcmp(feature, "streaming") == 0) {
-                if (enabled) {
-                    // Start HLS streaming
-                    stream_start_hls(state->name);
-                } else {
-                    // Stop HLS streaming
-                    stream_stop_hls(state->name);
-                }
-            } else if (strcmp(feature, "recording") == 0) {
-                if (enabled) {
-                    // Start recording — route through go2rtc when available
+
+        if (strcmp(feature, "recording") == 0) {
+            // Recording start/stop runs independently of the stream state machine.
+            // The MP4 recording thread is a separate thread that must be explicitly
+            // stopped whenever recording is disabled — even if the stream is currently
+            // reconnecting, starting, or in any other non-ACTIVE state.  Skipping the
+            // stop here was the root cause of "disabled saving to disk but it kept
+            // recording" (the recording thread was already running and the ACTIVE guard
+            // prevented stop_mp4_recording from being called).
+            if (enabled) {
+                // Only start a new recording thread when the stream is ACTIVE and
+                // actually producing data; the start_stream_with_state path will
+                // start recording on the next successful connection otherwise.
+                if (current_state == STREAM_STATE_ACTIVE) {
                     log_info("Starting recording for stream '%s'", state->name);
                     #ifdef USE_GO2RTC
                     go2rtc_integration_start_recording(state->name);
@@ -450,9 +451,23 @@ int set_stream_feature(stream_state_manager_t *state, const char *feature, bool 
                     start_mp4_recording(state->name);
                     #endif
                 } else {
-                    // Stop recording
-                    log_info("Calling stop_mp4_recording for stream '%s'", state->name);
-                    stop_mp4_recording(state->name);
+                    log_info("Stream '%s' is not ACTIVE (state=%d), recording will start when stream becomes active",
+                            state->name, current_state);
+                }
+            } else {
+                // Always stop recording regardless of stream state.
+                log_info("Calling stop_mp4_recording for stream '%s' (state=%d)",
+                        state->name, current_state);
+                stop_mp4_recording(state->name);
+            }
+        } else if (current_state == STREAM_STATE_ACTIVE) {
+            // All other feature changes (streaming, detection) are only applied
+            // when the stream is ACTIVE — they rely on live data flow.
+            if (strcmp(feature, "streaming") == 0) {
+                if (enabled) {
+                    stream_start_hls(state->name);
+                } else {
+                    stream_stop_hls(state->name);
                 }
             } else if (strcmp(feature, "detection") == 0 || strcmp(feature, "motion_detection") == 0) {
                 // For detection features, we need to restart the stream
@@ -461,7 +476,8 @@ int set_stream_feature(stream_state_manager_t *state, const char *feature, bool 
                 start_stream_with_state(state);
             }
         } else {
-            log_info("Stream '%s' is not ACTIVE (state=%d), skipping feature application", state->name, current_state);
+            log_info("Stream '%s' is not ACTIVE (state=%d), skipping non-recording feature application",
+                    state->name, current_state);
         }
     }
 

@@ -343,8 +343,24 @@ bool go2rtc_stream_get_rtsp_url(const char *stream_id, char *buffer, size_t buff
         log_info("Retrieved RTSP port from go2rtc API: %d", rtsp_port);
     }
 
+    // URL-encode the stream name so that names containing spaces or other
+    // special characters produce a valid RTSP URL.  Without encoding, a name
+    // like "My Camera" would yield "rtsp://localhost:8554/My Camera" which
+    // FFmpeg (and other RTSP clients) reject, resulting in a 404.
+    char encoded_id[URL_BUFFER_SIZE];
+    char *encoded = curl_easy_escape(NULL, stream_id, 0);
+    if (encoded) {
+        strncpy(encoded_id, encoded, URL_BUFFER_SIZE - 1);
+        encoded_id[URL_BUFFER_SIZE - 1] = '\0';
+        curl_free(encoded);
+    } else {
+        log_warn("Failed to URL-encode stream ID '%s', using raw name", stream_id);
+        strncpy(encoded_id, stream_id, URL_BUFFER_SIZE - 1);
+        encoded_id[URL_BUFFER_SIZE - 1] = '\0';
+    }
+
     // Format the RTSP URL
-    snprintf(buffer, buffer_size, "rtsp://localhost:%d/%s", rtsp_port, stream_id);
+    snprintf(buffer, buffer_size, "rtsp://localhost:%d/%s", rtsp_port, encoded_id);
     log_info("Generated RTSP URL for stream %s: %s", stream_id, buffer);
 
     return true;

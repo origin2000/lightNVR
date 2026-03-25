@@ -198,7 +198,20 @@ static bool check_stream_data_flow(const char *stream_name) {
     char url[512];
     int api_port_val = go2rtc_stream_get_api_port();
     if (api_port_val == 0) api_port_val = 1984;
-    snprintf(url, sizeof(url), "http://localhost:%d" GO2RTC_BASE_PATH "/api/streams?src=%s", api_port_val, stream_name);
+
+    // URL-encode the stream name so that names with spaces work correctly.
+    char encoded_name[512];
+    char *enc = curl_easy_escape(curl, stream_name, 0);
+    if (enc) {
+        strncpy(encoded_name, enc, sizeof(encoded_name) - 1);
+        encoded_name[sizeof(encoded_name) - 1] = '\0';
+        curl_free(enc);
+    } else {
+        strncpy(encoded_name, stream_name, sizeof(encoded_name) - 1);
+        encoded_name[sizeof(encoded_name) - 1] = '\0';
+    }
+
+    snprintf(url, sizeof(url), "http://localhost:%d" GO2RTC_BASE_PATH "/api/streams?src=%s", api_port_val, encoded_name);
 
     char *response = NULL;
     curl_easy_setopt(curl, CURLOPT_URL, url);

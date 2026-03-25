@@ -331,8 +331,25 @@ bool go2rtc_api_remove_stream(const char *stream_id) {
     response_buffer_t resp = { .size = 0 };
     resp.buffer[0] = '\0';
 
+    // URL-encode the stream ID so that names with spaces or other special
+    // characters are correctly passed as the ?src= query parameter.
+    // Without encoding, "My Camera" would become "?src=My Camera" which is
+    // invalid HTTP and causes go2rtc to silently ignore the delete request,
+    // leaving the stream registered and still attempting to reconnect.
+    char encoded_id[URL_BUFFER_SIZE];
+    char *enc = curl_easy_escape(curl, stream_id, 0);
+    if (enc) {
+        strncpy(encoded_id, enc, URL_BUFFER_SIZE - 1);
+        encoded_id[URL_BUFFER_SIZE - 1] = '\0';
+        curl_free(enc);
+    } else {
+        log_warn("Failed to URL-encode stream ID '%s' for delete, using raw name", stream_id);
+        strncpy(encoded_id, stream_id, URL_BUFFER_SIZE - 1);
+        encoded_id[URL_BUFFER_SIZE - 1] = '\0';
+    }
+
     // Format the URL for the API endpoint with the src parameter
-    snprintf(url, sizeof(url), "http://%s:%d" GO2RTC_BASE_PATH "/api/streams?src=%s", g_api_host, g_api_port, stream_id); // codeql[cpp/non-https-url] - localhost-only internal API
+    snprintf(url, sizeof(url), "http://%s:%d" GO2RTC_BASE_PATH "/api/streams?src=%s", g_api_host, g_api_port, encoded_id); // codeql[cpp/non-https-url] - localhost-only internal API
 
     // Log the URL for debugging
     log_info("DELETE URL: %s", url);
@@ -367,8 +384,8 @@ bool go2rtc_api_remove_stream(const char *stream_id) {
             resp.size = 0;
             resp.buffer[0] = '\0';
 
-            // Format the URL for the old API endpoint
-            snprintf(url, sizeof(url), "http://%s:%d" GO2RTC_BASE_PATH "/api/streams/%s", g_api_host, g_api_port, stream_id); // codeql[cpp/non-https-url] - localhost-only internal API
+            // Format the URL for the old API endpoint (encoded_id already computed above)
+            snprintf(url, sizeof(url), "http://%s:%d" GO2RTC_BASE_PATH "/api/streams/%s", g_api_host, g_api_port, encoded_id); // codeql[cpp/non-https-url] - localhost-only internal API
 
             log_info("Fallback DELETE URL: %s", url);
 
@@ -728,9 +745,22 @@ static bool preload_attempt(const char *stream_id, const char *query, long timeo
         return false;
     }
 
+    // URL-encode the stream ID to handle names with spaces or special characters.
+    char encoded_id[URL_BUFFER_SIZE];
+    char *enc = curl_easy_escape(curl, stream_id, 0);
+    if (enc) {
+        strncpy(encoded_id, enc, URL_BUFFER_SIZE - 1);
+        encoded_id[URL_BUFFER_SIZE - 1] = '\0';
+        curl_free(enc);
+    } else {
+        log_warn("Failed to URL-encode stream ID '%s' for preload, using raw name", stream_id);
+        strncpy(encoded_id, stream_id, URL_BUFFER_SIZE - 1);
+        encoded_id[URL_BUFFER_SIZE - 1] = '\0';
+    }
+
     char url[URL_BUFFER_SIZE];
     snprintf(url, sizeof(url), "http://%s:%d" GO2RTC_BASE_PATH "/api/preload?src=%s&%s", // codeql[cpp/non-https-url] - localhost-only internal API
-             g_api_host, g_api_port, stream_id, query);
+             g_api_host, g_api_port, encoded_id, query);
 
     log_info("Preloading stream with URL: %s", url);
 
