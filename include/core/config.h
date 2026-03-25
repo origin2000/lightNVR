@@ -86,6 +86,12 @@ typedef struct {
 
     // Optional camera admin page URL (e.g. http://192.168.1.100/)
     char admin_url[MAX_URL_LENGTH];
+
+    // Privacy mode: temporarily pauses the stream from the Live View page
+    // without modifying the administrative 'enabled' flag.
+    // When true the stream is stopped (equivalent to disabled) but remains
+    // visible in the Live View with a privacy overlay.
+    bool privacy_mode;
 } stream_config_t;
 
 // Size of recording schedule text buffer: 168 values + 167 commas + null terminator

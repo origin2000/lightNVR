@@ -128,9 +128,9 @@ export function WebRTCVideoCell({
   // PTZ controls state
   const [showPTZControls, setShowPTZControls] = useState(false);
 
-  // Disable/enable stream state
-  const [showDisableConfirm, setShowDisableConfirm] = useState(false);
-  const [localIsDisabled, setLocalIsDisabled] = useState(false);
+  // Privacy mode state
+  const [showPrivacyConfirm, setShowPrivacyConfirm] = useState(false);
+  const [privacyActive, setPrivacyActive] = useState(!!stream.privacy_mode);
   const [isTogglingEnabled, setIsTogglingEnabled] = useState(false);
 
   // Detection overlay visibility state (per-camera toggle, constrained by global toggle)
@@ -942,40 +942,44 @@ export function WebRTCVideoCell({
   };
 
   /**
-   * Handle disable stream (soft delete)
+   * Pause stream for privacy — sets privacy_mode=true without touching the enabled flag.
    */
-  const handleDisableStream = async () => {
+  const handlePauseForPrivacy = async () => {
     setIsTogglingEnabled(true);
     try {
-      const res = await fetch(`/api/streams/${encodeURIComponent(stream.name)}`, { method: 'DELETE' });
+      const res = await fetch(`/api/streams/${encodeURIComponent(stream.name)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ set_privacy_mode: true }),
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setLocalIsDisabled(true);
-      setShowDisableConfirm(false);
+      setPrivacyActive(true);
+      setShowPrivacyConfirm(false);
       queryClient.invalidateQueries({ queryKey: ['streams'] });
     } catch (err) {
-      showStatusMessage(`${t('live.disableStream')}: ${err.message}`, 'error', 5000);
-      setShowDisableConfirm(false);
+      showStatusMessage(`${t('live.pauseForPrivacy')}: ${err.message}`, 'error', 5000);
+      setShowPrivacyConfirm(false);
     } finally {
       setIsTogglingEnabled(false);
     }
   };
 
   /**
-   * Handle enable stream
+   * Resume stream from privacy mode.
    */
-  const handleEnableStream = async () => {
+  const handleResumeFromPrivacy = async () => {
     setIsTogglingEnabled(true);
     try {
       const res = await fetch(`/api/streams/${encodeURIComponent(stream.name)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enable_disabled: true, enabled: true })
+        body: JSON.stringify({ set_privacy_mode: false }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setLocalIsDisabled(false);
+      setPrivacyActive(false);
       queryClient.invalidateQueries({ queryKey: ['streams'] });
     } catch (err) {
-      showStatusMessage(`${t('live.enableStream')}: ${err.message}`, 'error', 5000);
+      showStatusMessage(`${t('live.resumeStream')}: ${err.message}`, 'error', 5000);
     } finally {
       setIsTogglingEnabled(false);
     }
@@ -1297,11 +1301,11 @@ export function WebRTCVideoCell({
             }}
           />
         </div>
-        {/* Disable stream button */}
+        {/* Pause for privacy button */}
         <button
           type="button"
-          title={t('live.disableStream')}
-          onClick={() => setShowDisableConfirm(true)}
+          title={t('live.pauseForPrivacy')}
+          onClick={() => setShowPrivacyConfirm(true)}
           style={{
             backgroundColor: 'transparent',
             border: 'none',
@@ -1704,8 +1708,8 @@ export function WebRTCVideoCell({
         confirmLabel={t('common.refresh')}
       />
 
-      {/* Inline disable confirmation overlay */}
-      {showDisableConfirm && (
+      {/* Inline pause-for-privacy confirmation overlay */}
+      {showPrivacyConfirm && (
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 20,
@@ -1714,21 +1718,21 @@ export function WebRTCVideoCell({
           padding: '16px', textAlign: 'center'
         }}>
           <p style={{ color: 'white', fontSize: '14px', maxWidth: '240px', lineHeight: '1.4' }}>
-            {t('live.disableStreamConfirm')}
+            {t('live.pauseForPrivacyConfirm')}
           </p>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
-              onClick={handleDisableStream}
+              onClick={handlePauseForPrivacy}
               disabled={isTogglingEnabled}
               style={{
-                padding: '6px 16px', backgroundColor: '#dc2626', color: 'white',
+                padding: '6px 16px', backgroundColor: '#7c3aed', color: 'white',
                 border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px'
               }}
             >
-              {t('live.disableStream')}
+              {t('live.pauseForPrivacy')}
             </button>
             <button
-              onClick={() => setShowDisableConfirm(false)}
+              onClick={() => setShowPrivacyConfirm(false)}
               style={{
                 padding: '6px 16px', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white',
                 border: '1px solid rgba(255,255,255,0.4)', borderRadius: '4px', cursor: 'pointer', fontSize: '13px'
@@ -1740,8 +1744,8 @@ export function WebRTCVideoCell({
         </div>
       )}
 
-      {/* Locally disabled overlay */}
-      {localIsDisabled && (
+      {/* Privacy mode overlay */}
+      {privacyActive && (
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 15,
@@ -1749,19 +1753,20 @@ export function WebRTCVideoCell({
           alignItems: 'center', justifyContent: 'center', gap: '12px'
         }}>
           <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18.36 6.64A9 9 0 1 1 5.64 17.36"/>
-            <line x1="12" y1="2" x2="12" y2="12"/>
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+            <line x1="1" y1="1" x2="23" y2="23"/>
           </svg>
-          <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '14px' }}>{t('live.streamDisabled')}</p>
+          <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '14px' }}>{t('live.streamPausedForPrivacy')}</p>
           <button
-            onClick={handleEnableStream}
+            onClick={handleResumeFromPrivacy}
             disabled={isTogglingEnabled}
             style={{
               padding: '6px 16px', backgroundColor: '#16a34a', color: 'white',
               border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px'
             }}
           >
-            {t('live.enableStream')}
+            {t('live.resumeStream')}
           </button>
         </div>
       )}

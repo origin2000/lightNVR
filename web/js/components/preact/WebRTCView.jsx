@@ -345,7 +345,8 @@ export function WebRTCView() {
       const detailedStreams = await Promise.all(streamPromises);
       console.log('Loaded detailed streams for WebRTC view:', detailedStreams);
 
-      // Filter out streams that are soft deleted, inactive, or not configured for streaming
+      // Filter out streams that are soft deleted, administratively disabled, or not configured for streaming.
+      // Streams in privacy mode (privacy_mode=true) are kept visible with a privacy overlay.
       const filteredStreams = detailedStreams.filter(stream => {
         // Filter out soft deleted streams
         if (stream.is_deleted) {
@@ -353,9 +354,9 @@ export function WebRTCView() {
           return false;
         }
 
-        // Filter out inactive streams
+        // Filter out administratively disabled streams (privacy_mode streams remain visible)
         if (!stream.enabled) {
-          console.log(`Stream ${stream.name} is inactive, filtering out`);
+          console.log(`Stream ${stream.name} is administratively disabled, filtering out`);
           return false;
         }
 

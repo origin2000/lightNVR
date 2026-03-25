@@ -253,14 +253,15 @@ export function LiveView({isWebRTCDisabled}) {
           }
           console.log('Loaded detailed streams for HLS view:', detailedStreams);
 
-          // Filter out streams that are soft deleted, inactive, or not configured for streaming
+          // Filter out streams that are soft deleted, administratively disabled, or not configured for streaming.
+          // Streams in privacy mode (privacy_mode=true) are kept visible with a privacy overlay.
           const filteredStreams = detailedStreams.filter(stream => {
             if (stream.is_deleted) {
               console.log(`Stream ${stream.name} is soft deleted, filtering out`);
               return false;
             }
             if (!stream.enabled) {
-              console.log(`Stream ${stream.name} is inactive, filtering out`);
+              console.log(`Stream ${stream.name} is administratively disabled, filtering out`);
               return false;
             }
             if (!stream.streaming_enabled) {

@@ -611,6 +611,12 @@ static const char migration_0037_up[] =
 static const char migration_0037_down[] =
     "SELECT 1;";
 
+static const char migration_0038_up[] =
+    "ALTER TABLE streams ADD COLUMN privacy_mode INTEGER DEFAULT 0;";
+
+static const char migration_0038_down[] =
+    "SELECT 1;";
+
 static const migration_t embedded_migrations_data[] = {
     {
         .version = "0001",
@@ -871,8 +877,15 @@ static const migration_t embedded_migrations_data[] = {
         .sql_down = migration_0037_down,
         .is_embedded = true
     },
+    {
+        .version = "0038",
+        .description = "add_privacy_mode",
+        .sql_up = migration_0038_up,
+        .sql_down = migration_0038_down,
+        .is_embedded = true
+    },
 };
 
-#define EMBEDDED_MIGRATIONS_COUNT 37
+#define EMBEDDED_MIGRATIONS_COUNT 38
 
 #endif /* DB_EMBEDDED_MIGRATIONS_H */

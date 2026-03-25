@@ -1429,9 +1429,14 @@ bool go2rtc_sync_streams_from_database(void) {
     int failed = 0;
 
     for (int i = 0; i < count; i++) {
-        // Skip disabled streams
+        // Skip disabled streams or streams in privacy mode
         if (!db_streams[i].enabled) {
             log_debug("Skipping disabled stream %s", db_streams[i].name);
+            skipped++;
+            continue;
+        }
+        if (db_streams[i].privacy_mode) {
+            log_debug("Skipping privacy-mode stream %s", db_streams[i].name);
             skipped++;
             continue;
         }

@@ -1423,6 +1423,58 @@ void handle_put_stream(const http_request_t *req, http_response_t *res) {
         }
     }
 
+    // Check if there's a request to set/clear privacy mode (lightweight toggle, no full restart)
+    cJSON *privacy_request = cJSON_GetObjectItem(stream_json, "set_privacy_mode");
+    if (privacy_request && cJSON_IsBool(privacy_request)) {
+        bool enable_privacy = cJSON_IsTrue(privacy_request);
+        log_info("Privacy mode %s requested for stream %s", enable_privacy ? "enable" : "disable", decoded_id);
+
+        sqlite3 *db = get_db_handle();
+        if (db) {
+            sqlite3_stmt *stmt;
+            const char *sql = "UPDATE streams SET privacy_mode = ? WHERE name = ?;";
+            if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
+                sqlite3_bind_int(stmt, 1, enable_privacy ? 1 : 0);
+                sqlite3_bind_text(stmt, 2, decoded_id, -1, SQLITE_STATIC);
+                if (sqlite3_step(stmt) != SQLITE_DONE) {
+                    log_error("Failed to set privacy mode for stream %s: %s", decoded_id, sqlite3_errmsg(db));
+                } else {
+                    log_info("Successfully set privacy_mode=%d for stream %s", enable_privacy ? 1 : 0, decoded_id);
+                    // If enabling privacy, stop stream processing; if disabling, restart it
+                    if (enable_privacy) {
+                        // Unregister from go2rtc so clients cannot connect
+                        go2rtc_integration_unregister_stream(decoded_id);
+                        log_info("Unregistered stream %s from go2rtc due to privacy mode", decoded_id);
+                    } else {
+                        // Resume: re-register with go2rtc
+                        if (go2rtc_integration_reload_stream(decoded_id)) {
+                            log_info("Re-registered stream %s with go2rtc after privacy mode cleared", decoded_id);
+                        } else {
+                            log_warn("Failed to re-register stream %s with go2rtc", decoded_id);
+                        }
+                    }
+                }
+                sqlite3_finalize(stmt);
+            }
+        }
+
+        cJSON_Delete(stream_json);
+        cJSON *response = cJSON_CreateObject();
+        if (response) {
+            cJSON_AddBoolToObject(response, "success", true);
+            cJSON_AddBoolToObject(response, "privacy_mode", enable_privacy);
+            char *response_str = cJSON_PrintUnformatted(response);
+            cJSON_Delete(response);
+            if (response_str) {
+                http_response_set_json(res, 200, response_str);
+                free(response_str);
+                return;
+            }
+        }
+        http_response_set_json_error(res, 500, "Failed to build response");
+        return;
+    }
+
     // Clean up JSON
     cJSON_Delete(stream_json);
 
