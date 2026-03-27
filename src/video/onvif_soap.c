@@ -1,5 +1,6 @@
 /**
- * onvif_soap.c – shared WS-Security header generation for ONVIF requests.
+ * onvif_soap.c – shared WS-Security header generation and SOAP fault
+ * parsing for ONVIF requests.
  *
  * This is the single canonical implementation of the ONVIF WS-UsernameToken
  * PasswordDigest security header.  All ONVIF subsystems (device management,
@@ -9,6 +10,7 @@
 
 #include "video/onvif_soap.h"
 #include "core/logger.h"
+#include "ezxml.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -132,3 +134,134 @@ char *onvif_create_security_header(const char *username, const char *password) {
     return header;
 }
 
+/* ----------------------------------------------------------------------- *
+ * SOAP Fault parsing                                                       *
+ * ----------------------------------------------------------------------- */
+
+/**
+ * Try to find a child element under multiple namespace prefixes.
+ * Returns the first match, or NULL if none found.
+ */
+static ezxml_t find_with_ns(ezxml_t parent, const char *local_name,
+                            const char **ns_prefixes, int ns_count) {
+    if (!parent) return NULL;
+    for (int i = 0; i < ns_count; i++) {
+        char qname[256];
+        snprintf(qname, sizeof(qname), "%s:%s", ns_prefixes[i], local_name);
+        ezxml_t child = ezxml_child(parent, qname);
+        if (child) return child;
+    }
+    /* Try without namespace prefix as a last resort */
+    return ezxml_child(parent, local_name);
+}
+
+void onvif_log_soap_fault(char *response, size_t response_len, const char *context) {
+    if (!response || response_len == 0) return;
+
+    const char *ctx = context ? context : "ONVIF";
+
+    /* ezxml_parse_str modifies the buffer in-place, so make a copy */
+    char *buf = malloc(response_len + 1);
+    if (!buf) {
+        /* Fallback: just log raw truncated response */
+        char snippet[256];
+        size_t n = response_len < sizeof(snippet) - 1 ? response_len : sizeof(snippet) - 1;
+        memcpy(snippet, response, n);
+        snippet[n] = '\0';
+        log_error("[%s] SOAP fault (raw): %s", ctx, snippet);
+        return;
+    }
+    memcpy(buf, response, response_len);
+    buf[response_len] = '\0';
+
+    ezxml_t xml = ezxml_parse_str(buf, response_len);
+    if (!xml) {
+        /* Could not parse XML at all — log raw snippet */
+        char snippet[512];
+        size_t n = response_len < sizeof(snippet) - 1 ? response_len : sizeof(snippet) - 1;
+        memcpy(snippet, response, n);
+        snippet[n] = '\0';
+        log_error("[%s] SOAP fault response (unparseable): %s", ctx, snippet);
+        free(buf);
+        return;
+    }
+
+    /* Namespace prefixes cameras may use for the SOAP envelope */
+    const char *env_ns[] = {"s", "S", "SOAP-ENV", "soap", "env"};
+    int env_ns_count = sizeof(env_ns) / sizeof(env_ns[0]);
+
+    /* Find Body */
+    ezxml_t body = find_with_ns(xml, "Body", env_ns, env_ns_count);
+
+    /* Find Fault */
+    ezxml_t fault = body ? find_with_ns(body, "Fault", env_ns, env_ns_count) : NULL;
+
+    if (!fault) {
+        /* No Fault element found — log raw snippet */
+        char snippet[512];
+        size_t n = response_len < sizeof(snippet) - 1 ? response_len : sizeof(snippet) - 1;
+        memcpy(snippet, response, n);
+        snippet[n] = '\0';
+        log_error("[%s] SOAP error response (no Fault element): %s", ctx, snippet);
+        ezxml_free(xml);
+        free(buf);
+        return;
+    }
+
+    /* Extract Code > Value */
+    const char *code_str = NULL;
+    const char *subcode_str = NULL;
+    ezxml_t code_elem = find_with_ns(fault, "Code", env_ns, env_ns_count);
+    if (code_elem) {
+        ezxml_t value_elem = find_with_ns(code_elem, "Value", env_ns, env_ns_count);
+        if (value_elem) code_str = ezxml_txt(value_elem);
+
+        ezxml_t subcode_elem = find_with_ns(code_elem, "Subcode", env_ns, env_ns_count);
+        if (subcode_elem) {
+            ezxml_t sub_value = find_with_ns(subcode_elem, "Value", env_ns, env_ns_count);
+            if (sub_value) subcode_str = ezxml_txt(sub_value);
+        }
+    }
+
+    /* Extract Reason > Text */
+    const char *reason_str = NULL;
+    ezxml_t reason_elem = find_with_ns(fault, "Reason", env_ns, env_ns_count);
+    if (reason_elem) {
+        ezxml_t text_elem = find_with_ns(reason_elem, "Text", env_ns, env_ns_count);
+        if (text_elem) reason_str = ezxml_txt(text_elem);
+    }
+
+    /* Also try faultstring (SOAP 1.1 style) if no Reason was found */
+    if (!reason_str || reason_str[0] == '\0') {
+        ezxml_t faultstring = ezxml_child(fault, "faultstring");
+        if (faultstring) reason_str = ezxml_txt(faultstring);
+    }
+
+    /* Build and log the message */
+    if (code_str && code_str[0] != '\0') {
+        if (subcode_str && subcode_str[0] != '\0') {
+            log_error("[%s] SOAP Fault: Code=%s, Subcode=%s, Reason=%s",
+                      ctx,
+                      code_str,
+                      subcode_str,
+                      (reason_str && reason_str[0] != '\0') ? reason_str : "(none)");
+        } else {
+            log_error("[%s] SOAP Fault: Code=%s, Reason=%s",
+                      ctx,
+                      code_str,
+                      (reason_str && reason_str[0] != '\0') ? reason_str : "(none)");
+        }
+    } else if (reason_str && reason_str[0] != '\0') {
+        log_error("[%s] SOAP Fault: %s", ctx, reason_str);
+    } else {
+        /* Could not extract anything useful — log raw */
+        char snippet[512];
+        size_t n = response_len < sizeof(snippet) - 1 ? response_len : sizeof(snippet) - 1;
+        memcpy(snippet, response, n);
+        snippet[n] = '\0';
+        log_error("[%s] SOAP Fault (could not extract details): %s", ctx, snippet);
+    }
+
+    ezxml_free(xml);
+    free(buf);
+}

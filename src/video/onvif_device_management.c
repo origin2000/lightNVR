@@ -110,10 +110,15 @@ static char* send_soap_request(const char *device_url, const char *soap_action, 
     res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
         log_error("CURL failed: %s", curl_easy_strerror(res));
-        
+
         // If the first attempt failed, try with the original envelope format
         log_info("First SOAP format failed, trying alternative format");
-        
+
+        // Reset response buffer for retry
+        free(chunk.memory);
+        chunk.memory = malloc(1);
+        chunk.size = 0;
+
         free(soap_envelope);
         soap_envelope = malloc(strlen(request_body) + strlen(security_header) + 1024);
         sprintf(soap_envelope,
@@ -133,20 +138,33 @@ static char* send_soap_request(const char *device_url, const char *soap_action, 
                 "<SOAP-ENV:Body>%s</SOAP-ENV:Body>"
             "</SOAP-ENV:Envelope>",
             security_header, request_body);
-        
+
         // Retry the request
         res = curl_easy_perform(curl);
         if (res != CURLE_OK) {
             log_error("Both SOAP formats failed: %s", curl_easy_strerror(res));
         } else {
-            response = strdup(chunk.memory);
             log_info("Second SOAP format succeeded");
         }
     } else {
-        response = strdup(chunk.memory);
         log_info("First SOAP format succeeded");
     }
-    
+
+    // Check HTTP response code and parse any SOAP fault
+    if (res == CURLE_OK) {
+        long http_code = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+
+        if (http_code != 200) {
+            log_error("ONVIF device management request failed with HTTP code %ld", http_code);
+            if (chunk.size > 0) {
+                onvif_log_soap_fault(chunk.memory, chunk.size, "Device Management");
+            }
+        } else if (chunk.size > 0) {
+            response = strdup(chunk.memory);
+        }
+    }
+
     // Log response if available
     if (response) {
         // Log first 200 characters of response for debugging

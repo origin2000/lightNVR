@@ -90,10 +90,22 @@ static char* send_ptz_soap_request(const char *ptz_url, const char *soap_action,
     res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
         log_error("PTZ CURL request failed: %s", curl_easy_strerror(res));
-    } else if (chunk.size > 0) {
-        response = strdup(chunk.memory);
+    } else {
+        // Check HTTP response code
+        long http_code = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+
+        if (http_code != 200) {
+            log_error("PTZ request failed with HTTP code %ld", http_code);
+            if (chunk.size > 0) {
+                onvif_log_soap_fault(chunk.memory, chunk.size, "PTZ");
+            }
+        } else if (chunk.size > 0) {
+            response = chunk.memory;
+            chunk.memory = NULL;  // Transfer ownership; caller will free
+        }
     }
-    
+
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
     free(soap_envelope);

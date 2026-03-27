@@ -170,6 +170,9 @@ static char *send_onvif_request(const char *url, const char *username, const cha
 
     if (http_code != 200) {
         log_error("ONVIF request failed with HTTP code %ld", http_code);
+        if (chunk.size > 0) {
+            onvif_log_soap_fault(chunk.memory, chunk.size, "ONVIF Detection");
+        }
         free(chunk.memory);
         pthread_mutex_unlock(&curl_mutex);
         return NULL;
@@ -229,6 +232,9 @@ static char *send_onvif_request_to_url(const char *full_url, const char *usernam
 
     if (http_code != 200) {
         log_error("ONVIF request to %s failed with HTTP code %ld", full_url, http_code);
+        if (chunk.size > 0) {
+            onvif_log_soap_fault(chunk.memory, chunk.size, "ONVIF Detection");
+        }
         free(chunk.memory);
         pthread_mutex_unlock(&curl_mutex);
         return NULL;
