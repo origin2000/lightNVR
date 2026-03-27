@@ -51,9 +51,6 @@ export function TimelinePlayer({ videoElementRef = null, autoFullscreen = false 
 
   const setVideoRefs = useCallback((node) => {
     videoRef.current = node;
-    if (videoRef.current) {
-      videoRef.current.ondblclick = () => handleToggleFullscreen();
-    }
 
     if (!videoElementRef) {
       return;
@@ -865,6 +862,25 @@ export function TimelinePlayer({ videoElementRef = null, autoFullscreen = false 
               onTimeUpdate={handleTimeUpdate}
           ></video>
 
+          {/* Click guard — sits above the video surface to intercept Firefox's
+              native click-to-play/pause behaviour.  pointerdown events still
+              propagate to the document so the fine-mode keyboard-nav handler
+              works normally.  Double-click forwards to the fullscreen toggle
+              since the video's own ondblclick is shadowed by this guard.
+              The guard stops just above the native controls bar (~40 px) so
+              play/pause, seek, and volume controls remain accessible. */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: '40px',
+              zIndex: 1,
+            }}
+            onDblClick={() => handleToggleFullscreen()}
+          />
+
           {/* Detection overlay canvas */}
           {detectionOverlayEnabled && (
             <canvas
@@ -878,8 +894,8 @@ export function TimelinePlayer({ videoElementRef = null, autoFullscreen = false 
               Clicking the overlay is the user gesture needed for requestFullscreen(). */}
           {showFullscreenPrompt && (
             <div
-              className="absolute inset-0 flex items-center justify-center bg-black/65 cursor-pointer rounded-lg"
-              style={{ zIndex: 10 }}
+              className="absolute inset-0 flex items-center justify-center cursor-pointer rounded-lg"
+              style={{ zIndex: 10, backgroundColor: 'rgba(0, 0, 0, 0.65)' }}
               onClick={async () => {
                 setShowFullscreenPrompt(false);
                 await handleToggleFullscreen();
@@ -893,7 +909,8 @@ export function TimelinePlayer({ videoElementRef = null, autoFullscreen = false 
                 <span className="text-sm font-medium">{t('timeline.clickToEnterFullscreen')}</span>
               </div>
               <button
-                className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-black/40 text-white/70 hover:text-white text-lg leading-none"
+                className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full text-lg leading-none"
+                style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)', color: 'rgba(255, 255, 255, 0.7)' }}
                 onClick={(e) => { e.stopPropagation(); setShowFullscreenPrompt(false); }}
                 aria-label={t('timeline.exitFullscreen')}
               >×</button>
