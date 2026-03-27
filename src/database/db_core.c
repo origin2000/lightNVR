@@ -31,7 +31,7 @@
 static sqlite3 *db = NULL;
 
 // Mutex for thread safety
-static pthread_mutex_t db_mutex;
+static pthread_mutex_t db_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Database path for backup/recovery operations
 static char db_file_path[1024] = {0};
