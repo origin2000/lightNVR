@@ -1,0 +1,272 @@
+name: Build Debian Package
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  build-deb:
+    name: Build .deb (${{ matrix.deb_arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux/amd64
+            deb_arch: amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            deb_arch: arm64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm/v7
+            deb_arch: armhf
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Set up QEMU
+        if: matrix.platform == 'linux/arm/v7'
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: false
+          load: true
+          tags: lightnvr-pkg:local
+
+      - name: Extract files and create .deb package
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DEB_ARCH="${{ matrix.deb_arch }}"
+          PKG_NAME="lightnvr_${VERSION}_${DEB_ARCH}"
+          PKG_DIR="$(pwd)/pkg/${PKG_NAME}"
+
+          # ── Directory structure ──────────────────────────────────────────────
+          mkdir -p "${PKG_DIR}/DEBIAN"
+          mkdir -p "${PKG_DIR}/usr/bin"
+          mkdir -p "${PKG_DIR}/etc/ld.so.conf.d"
+          mkdir -p "${PKG_DIR}/etc/lightnvr/go2rtc"
+          mkdir -p "${PKG_DIR}/var/lib/lightnvr/www"
+          mkdir -p "${PKG_DIR}/var/lib/lightnvr/data"
+          mkdir -p "${PKG_DIR}/var/log/lightnvr"
+          mkdir -p "${PKG_DIR}/var/run/lightnvr"
+          mkdir -p "${PKG_DIR}/usr/share/lightnvr/migrations"
+          mkdir -p "${PKG_DIR}/usr/lib/lightnvr"
+          mkdir -p "${PKG_DIR}/lib/systemd/system"
+
+          # ── Extract image filesystem ─────────────────────────────────────────
+          CID=$(docker create lightnvr-pkg:local)
+          trap "docker rm -f '${CID}' 2>/dev/null || true" EXIT
+
+          # Binaries
+          docker cp "${CID}:/bin/lightnvr" "${PKG_DIR}/usr/bin/lightnvr"
+          docker cp "${CID}:/bin/go2rtc"   "${PKG_DIR}/usr/bin/go2rtc"
+
+          # Custom-built libraries (bundle to guarantee ABI compatibility)
+          mkdir -p /tmp/lightnvr_libs
+          docker export "${CID}" | tar xf - --wildcards \
+            'usr/lib/libuv.so*' \
+            'usr/lib/libllhttp.so*' \
+            'usr/lib/libsqlite3.so*' \
+            'lib/libsod.so*' \
+            -C /tmp/lightnvr_libs/ 2>/dev/null || true
+
+          find /tmp/lightnvr_libs -type f -name '*.so*' ! -type l \
+            -exec install -m 644 {} "${PKG_DIR}/usr/lib/lightnvr/" \;
+
+          # Recreate symlinks inside the package directory
+          (cd "${PKG_DIR}/usr/lib/lightnvr" && \
+            for f in libuv.so.1.0.0 libllhttp.so.9.3.1 libsod.so.1.1.9; do \
+              [ -f "$f" ] || continue; \
+              BASE="${f%%.*}"; \
+              SONAME=$(readlink -f /tmp/lightnvr_libs/usr/lib/${f} 2>/dev/null | xargs -I{} basename {} 2>/dev/null || echo ""); \
+              ln -sf "$f" "${BASE}.so" 2>/dev/null || true; \
+            done; \
+            [ -f libsod.so.1.1.9 ] && ln -sf libsod.so.1.1.9 libsod.so.1 && ln -sf libsod.so.1 libsod.so || true; \
+            [ -f libuv.so.1.0.0  ] && ln -sf libuv.so.1.0.0  libuv.so.1  && ln -sf libuv.so.1  libuv.so  || true; \
+            [ -f libllhttp.so.9.3.1 ] && ln -sf libllhttp.so.9.3.1 libllhttp.so.9 && ln -sf libllhttp.so.9 libllhttp.so || true)
+
+          # Find and symlink sqlite3 if extracted
+          SQLITE_FILE=$(find "${PKG_DIR}/usr/lib/lightnvr" -name 'libsqlite3.so.*' ! -type l | head -1)
+          if [ -n "${SQLITE_FILE}" ]; then
+            BASE=$(basename "${SQLITE_FILE}")
+            (cd "${PKG_DIR}/usr/lib/lightnvr" && \
+              ln -sf "${BASE}" libsqlite3.so.0 2>/dev/null || true && \
+              ln -sf libsqlite3.so.0 libsqlite3.so 2>/dev/null || true)
+          fi
+
+          # Web assets, migrations, config
+          docker cp "${CID}:/var/lib/lightnvr/www/."              "${PKG_DIR}/var/lib/lightnvr/www/"
+          docker cp "${CID}:/usr/share/lightnvr/migrations/."     "${PKG_DIR}/usr/share/lightnvr/migrations/"
+          docker cp "${CID}:/etc/lightnvr/."                      "${PKG_DIR}/etc/lightnvr/"
+
+          # ── ldconfig drop-in ────────────────────────────────────────────────
+          echo "/usr/lib/lightnvr" > "${PKG_DIR}/etc/ld.so.conf.d/lightnvr.conf"
+
+          # ── systemd service ─────────────────────────────────────────────────
+          cat > "${PKG_DIR}/lib/systemd/system/lightnvr.service" << 'SYSTEMD_EOF'
+          [Unit]
+          Description=LightNVR - Lightweight Network Video Recorder
+          After=network.target network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=forking
+          PIDFile=/var/run/lightnvr.pid
+          User=root
+          Group=root
+          Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+          Environment="HOME=/root"
+          ExecStart=/usr/bin/lightnvr -c /etc/lightnvr/lightnvr.ini -d
+          ExecReload=/bin/kill -HUP $MAINPID
+          KillMode=mixed
+          KillSignal=SIGTERM
+          TimeoutStartSec=30
+          TimeoutStopSec=30
+          Restart=on-failure
+          RestartSec=5
+          ExecStartPre=/bin/mkdir -p /var/lib/lightnvr/data /var/log/lightnvr /var/run/lightnvr
+          StandardOutput=journal
+          StandardError=journal
+          SyslogIdentifier=lightnvr
+
+          [Install]
+          WantedBy=multi-user.target
+          SYSTEMD_EOF
+          # Un-indent the service file (heredoc indented for readability)
+          sed -i 's/^          //' "${PKG_DIR}/lib/systemd/system/lightnvr.service"
+
+          # ── DEBIAN/control ──────────────────────────────────────────────────
+          INSTALLED_SIZE=$(du -sk "${PKG_DIR}" | cut -f1)
+          cat > "${PKG_DIR}/DEBIAN/control" << CONTROL_EOF
+          Package: lightnvr
+          Version: ${VERSION}
+          Architecture: ${DEB_ARCH}
+          Maintainer: OpenSensor <support@opensensor.io>
+          Installed-Size: ${INSTALLED_SIZE}
+          Depends: ffmpeg, libavcodec62 | libavcodec-extra, libavformat62, libavutil60, libswscale9, libcurl4t64 | libcurl4, libmbedtls21, libmosquitto1, libcjson1, procps
+          Section: net
+          Priority: optional
+          Homepage: https://github.com/opensensor/lightNVR
+          Description: Lightweight Network Video Recorder
+           LightNVR is a lightweight Network Video Recorder designed for recording,
+           managing, and streaming video from IP cameras via RTSP.
+           .
+           Features: RTSP recording, WebRTC streaming (go2rtc), object detection
+           (SOD), ONVIF discovery, MQTT integration, and a web-based UI.
+           .
+           Note: This package targets Debian sid. Ubuntu users are encouraged to
+           use the official Docker image (ghcr.io/opensensor/lightnvr).
+          CONTROL_EOF
+          sed -i 's/^          //' "${PKG_DIR}/DEBIAN/control"
+
+          # ── DEBIAN/conffiles ────────────────────────────────────────────────
+          printf '/etc/lightnvr/lightnvr.ini\n/etc/lightnvr/go2rtc/go2rtc.yaml\n' \
+            > "${PKG_DIR}/DEBIAN/conffiles"
+
+          # ── DEBIAN/postinst ─────────────────────────────────────────────────
+          cat > "${PKG_DIR}/DEBIAN/postinst" << 'POSTINST_EOF'
+          #!/bin/sh
+          set -e
+          ldconfig
+          if command -v systemctl >/dev/null 2>&1 && \
+             systemctl is-system-running --quiet 2>/dev/null; then
+            systemctl daemon-reload || true
+          fi
+          echo "LightNVR installed."
+          echo "  Start:       sudo systemctl start lightnvr"
+          echo "  Enable boot: sudo systemctl enable lightnvr"
+          echo "  Config:      /etc/lightnvr/lightnvr.ini"
+          echo "  Web UI:      http://localhost:8080"
+          POSTINST_EOF
+          chmod 755 "${PKG_DIR}/DEBIAN/postinst"
+
+          # ── DEBIAN/prerm ────────────────────────────────────────────────────
+          cat > "${PKG_DIR}/DEBIAN/prerm" << 'PRERM_EOF'
+          #!/bin/sh
+          set -e
+          if command -v systemctl >/dev/null 2>&1; then
+            systemctl stop    lightnvr 2>/dev/null || true
+            systemctl disable lightnvr 2>/dev/null || true
+          fi
+          PRERM_EOF
+          chmod 755 "${PKG_DIR}/DEBIAN/prerm"
+
+          # ── DEBIAN/postrm ───────────────────────────────────────────────────
+          cat > "${PKG_DIR}/DEBIAN/postrm" << 'POSTRM_EOF'
+          #!/bin/sh
+          set -e
+          if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+            ldconfig
+          fi
+          POSTRM_EOF
+          chmod 755 "${PKG_DIR}/DEBIAN/postrm"
+
+          # ── Permissions ─────────────────────────────────────────────────────
+          chmod 755 "${PKG_DIR}/usr/bin/lightnvr"
+          chmod 755 "${PKG_DIR}/usr/bin/go2rtc"
+          find "${PKG_DIR}/usr/lib/lightnvr" -type f -exec chmod 644 {} \;
+          find "${PKG_DIR}/usr/lib/lightnvr" -type l | while read link; do
+            chmod -h 777 "$link" 2>/dev/null || true
+          done
+
+          # ── Build .deb ──────────────────────────────────────────────────────
+          dpkg-deb --build --root-owner-group "${PKG_DIR}" "pkg/${PKG_NAME}.deb"
+          echo "Built: pkg/${PKG_NAME}.deb ($(du -sh "pkg/${PKG_NAME}.deb" | cut -f1))"
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: deb-${{ matrix.deb_arch }}
+          path: pkg/*.deb
+          retention-days: 7
+
+  upload-to-release:
+    name: Upload .deb packages to GitHub Release
+    needs: build-deb
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download all .deb artifacts
+        uses: actions/download-artifact@v5
+        with:
+          pattern: deb-*
+          merge-multiple: true
+          path: packages/
+
+      - name: List packages
+        run: ls -lh packages/
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: packages/*.deb
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
