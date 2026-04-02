@@ -458,16 +458,45 @@ int url_redact_for_logging(const char *url, char *out_url, size_t out_size) {
 
 // Simple URL encoding for special characters
 void simple_url_escape(const char *input, char *output, size_t output_size) {
-    const char *p = input;
-    char *q = output;
-    while (*p && (q - output < output_size - 4)) {
-        if (isalnum(*p) || *p == '-' || *p == '_' || *p == '.' || *p == '~') {
-            *q++ = *p;
+    const char *p;
+    char *q;
+
+    if (!input || !output || output_size == 0) {
+        return;
+    }
+
+    output[0] = '\0';
+
+    p = input;
+    q = output;
+
+    while (*p) {
+        size_t used = (size_t)(q - output);
+        size_t remaining = (used < output_size) ? (output_size - used) : 0;
+        unsigned char c;
+
+        if (remaining <= 1) {
+            break;
+        }
+
+        c = (unsigned char)*p;
+
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            *q++ = (char)c;
         } else {
-            sprintf(q, "%%%02X", (unsigned char)*p);
+            /* Need space for "%XX" (3 chars) plus terminating NUL */
+            if (remaining <= 3) {
+                break;
+            }
+            (void)snprintf(q, remaining, "%%%02X", c);
             q += 3;
         }
         p++;
     }
-    *q = '\0';
+
+    if ((size_t)(q - output) < output_size) {
+        *q = '\0';
+    } else {
+        output[output_size - 1] = '\0';
+    }
 }
