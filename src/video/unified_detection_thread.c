@@ -745,9 +745,14 @@ int get_unified_detection_stats(const char *stream_name,
  * event must be forwarded to a slave stream that runs as a UDT (e.g. the PTZ
  * lens on a TP-Link C545D which has no ONVIF profile of its own).
  *
- * The function is intentionally non-blocking: it only writes to an atomic
- * flag that the UDT thread reads on each packet iteration.  If the target
- * stream is not managed by a UDT the call is a silent no-op.
+ * This function looks up the target stream under contexts_mutex, so it may
+ * block while waiting for that mutex. If a matching UDT context is found, it
+ * updates ctx->external_motion_trigger atomically; if the target stream is not
+ * managed by a UDT the call is a silent no-op.
+ *
+ * The trigger is not consumed immediately on every packet. It is observed by
+ * the UDT thread during its normal keyframe-based detection processing, so
+ * externally-forwarded motion may not take effect until the next such check.
  *
  * Values written to ctx->external_motion_trigger:
  *   1 = motion active (start / keep-alive)
