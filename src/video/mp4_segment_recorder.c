@@ -967,7 +967,10 @@ int record_segment(const char *rtsp_url, const char *output_file, int duration, 
 
                     log_info("Found first key frame, starting recording");
 
-                    // Notify caller that segment has officially started (aligned to keyframe)
+                    // Notify caller that segment has officially started (aligned to keyframe).
+                    // The callback (on_segment_started_cb in mp4_writer_thread.c) creates the
+                    // database recording entry at this point so that start_time is anchored
+                    // to a decodable keyframe rather than the wall-clock time of avformat_open_input.
                     if (!started_cb_called && started_cb) {
                         started_cb(cb_ctx);
                         started_cb_called = true;

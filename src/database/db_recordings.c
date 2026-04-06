@@ -204,6 +204,57 @@ int update_recording_metadata(uint64_t id, time_t end_time,
     return 0;
 }
 
+/**
+ * Correct the start_time of an existing recording in the database.
+ *
+ * Used after flushing the pre-event circular buffer into a detection recording
+ * so that the stored start_time matches the actual first packet timestamp
+ * rather than the time mp4_writer_create() was called.
+ */
+int update_recording_start_time(uint64_t id, time_t start_time) {
+    int rc;
+    sqlite3_stmt *stmt;
+
+    sqlite3 *db = get_db_handle();
+    pthread_mutex_t *db_mutex = get_db_mutex();
+
+    if (!db) {
+        log_error("Database not initialized");
+        return -1;
+    }
+
+    pthread_mutex_lock(db_mutex);
+
+    const char *sql = "UPDATE recordings SET start_time = ? WHERE id = ?;";
+
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        log_error("Failed to prepare update_recording_start_time statement: %s",
+                  sqlite3_errmsg(db));
+        pthread_mutex_unlock(db_mutex);
+        return -1;
+    }
+
+    sqlite3_bind_int64(stmt, 1, (sqlite3_int64)start_time);
+    sqlite3_bind_int64(stmt, 2, (sqlite3_int64)id);
+
+    rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE) {
+        log_error("Failed to update recording start_time (id=%lu): %s",
+                  (unsigned long)id, sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        pthread_mutex_unlock(db_mutex);
+        return -1;
+    }
+
+    sqlite3_finalize(stmt);
+    pthread_mutex_unlock(db_mutex);
+
+    log_debug("Corrected start_time for recording ID %lu to %ld",
+              (unsigned long)id, (long)start_time);
+    return 0;
+}
+
 // Get recording metadata by ID
 int get_recording_metadata_by_id(uint64_t id, recording_metadata_t *metadata) {
     int rc;

@@ -351,7 +351,16 @@ static void *mp4_writer_rtsp_thread(void *arg) {
                 // Reset current recording ID; new ID will be assigned on first keyframe of next segment
                 thread_ctx->writer->current_recording_id = 0;
 
+                // Reset creation_time to the rotation wall-clock time.
+                // Note: mp4_writer_close() now derives end_time from st.st_mtime
+                // (the file's last-modified timestamp after avio_closep), so
+                // creation_time is no longer used as a baseline for end_time.
+                // It is kept here for diagnostics and any future callers that
+                // may still reference it.
+                thread_ctx->writer->creation_time = current_time;
 
+                // Reset the start_time_corrected flag for the new segment.
+                thread_ctx->writer->start_time_corrected = false;
 
                 // Update rotation time
                 thread_ctx->writer->last_rotation_time = current_time;
