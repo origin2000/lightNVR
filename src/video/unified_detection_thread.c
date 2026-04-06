@@ -1358,11 +1358,11 @@ stats_done:
     // --- External motion trigger (e.g. ONVIF event forwarded from a master stream) ---
     // Consumed on every keyframe, regardless of current state.
     //
-    // FIX (Copilot review): the exchange was previously inside the
-    // "is_keyframe && != POST_BUFFER" guard, making the POST_BUFFER branch
-    // unreachable and preventing a motion keep-alive from extending an active
-    // recording back from POST_BUFFER to RECORDING.  Moving the exchange here
-    // ensures the flag is always consumed and all state transitions are reachable.
+    // The exchange used to be inside the stricter keyframe/state guard, which
+    // made the POST_BUFFER branch unreachable and prevented a motion keep-alive
+    // from extending an active recording back from POST_BUFFER to RECORDING.
+    // Consuming the flag here ensures it is always handled on keyframes and
+    // keeps the intended state transitions reachable.
     if (is_keyframe) {
         int ext_trigger = atomic_exchange(&ctx->external_motion_trigger, 0);
 
