@@ -23,6 +23,7 @@
 #include "core/config.h"
 #define LOG_COMPONENT "HTTP"
 #include "core/logger.h"
+#include "utils/strings.h"
 
 // Initial handler capacity
 #define INITIAL_HANDLER_CAPACITY 32
@@ -584,9 +585,9 @@ int libuv_server_register_handler(http_server_handle_t handle, const char *path,
 
     // Add new handler
     int idx = server->handler_count;
-    strncpy(server->handlers[idx].path, path, sizeof(server->handlers[idx].path) - 1);
+    safe_strcpy(server->handlers[idx].path, path, sizeof(server->handlers[idx].path), 0);
     if (method) {
-        strncpy(server->handlers[idx].method, method, sizeof(server->handlers[idx].method) - 1);
+        safe_strcpy(server->handlers[idx].method, method, sizeof(server->handlers[idx].method), 0);
     } else {
         server->handlers[idx].method[0] = '\0';  // Match any method
     }
@@ -636,7 +637,7 @@ static void on_connection(uv_stream_t *listener, int status) {
     } else if (addr.ss_family == AF_INET6) {
         uv_ip6_name((struct sockaddr_in6 *)&addr, ip, sizeof(ip));
     }
-    strncpy(conn->request.client_ip, ip, sizeof(conn->request.client_ip) - 1);
+    safe_strcpy(conn->request.client_ip, ip, sizeof(conn->request.client_ip), 0);
 
     log_debug("on_connection: New connection from %s", ip);
 

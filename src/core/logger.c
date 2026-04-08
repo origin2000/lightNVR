@@ -18,6 +18,7 @@
 #include "core/config.h"
 #include "core/logger.h"
 #include "core/logger_json.h"
+#include "utils/strings.h"
 
 // Logger state
 static struct {
@@ -55,10 +56,8 @@ static __thread char tls_log_component[64]  = {0};
 static __thread char tls_log_stream[128]    = {0};
 
 void log_set_thread_context(const char *component, const char *stream_name) {
-    strncpy(tls_log_component, component    ? component    : "", sizeof(tls_log_component) - 1);
-    tls_log_component[sizeof(tls_log_component) - 1] = '\0';
-    strncpy(tls_log_stream,    stream_name ? stream_name : "", sizeof(tls_log_stream) - 1);
-    tls_log_stream[sizeof(tls_log_stream) - 1] = '\0';
+    safe_strcpy(tls_log_component, component ? component : "", sizeof(tls_log_component), 0);
+    safe_strcpy(tls_log_stream, stream_name ? stream_name : "", sizeof(tls_log_stream), 0);
 }
 
 void log_clear_thread_context(void) {
@@ -263,8 +262,7 @@ int set_log_file(const char *filename) {
     }
 
     // Store filename for potential log rotation
-    strncpy(logger.log_filename, filename, sizeof(logger.log_filename) - 1);
-    logger.log_filename[sizeof(logger.log_filename) - 1] = '\0';
+    safe_strcpy(logger.log_filename, filename, sizeof(logger.log_filename), 0);
 
     pthread_mutex_unlock(&logger.mutex);
 
@@ -605,8 +603,7 @@ int enable_syslog(const char *ident, int facility) {
     }
 
     // Store the identifier
-    strncpy(logger.syslog_ident, ident, sizeof(logger.syslog_ident) - 1);
-    logger.syslog_ident[sizeof(logger.syslog_ident) - 1] = '\0';
+    safe_strcpy(logger.syslog_ident, ident, sizeof(logger.syslog_ident), 0);
 
     // Open syslog connection
     // LOG_PID: include PID with each message

@@ -13,6 +13,7 @@
 #include "core/config.h"
 #include "core/logger.h"
 #include "core/logger_json.h"
+#include "utils/strings.h"
 #include <cjson/cJSON.h>
 
 // JSON logger state
@@ -120,8 +121,7 @@ int init_json_logger(const char *filename) {
     }
     
     // Store filename for potential log rotation
-    strncpy(json_logger.log_filename, filename, sizeof(json_logger.log_filename) - 1);
-    json_logger.log_filename[sizeof(json_logger.log_filename) - 1] = '\0';
+    safe_strcpy(json_logger.log_filename, filename, sizeof(json_logger.log_filename), 0);
     
     json_logger.initialized = 1;
     

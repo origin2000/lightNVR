@@ -37,6 +37,7 @@
 #include "core/config.h"
 #include "core/path_utils.h"
 #include "core/shutdown_coordinator.h"
+#include "utils/strings.h"
 #include "video/unified_detection_thread.h"
 #include "video/packet_buffer.h"
 #include "video/detection.h"
@@ -468,8 +469,8 @@ int start_unified_detection_thread(const char *stream_name, const char *model_pa
     config_t *global_cfg = get_streaming_config();
 
     // Initialize context
-    strncpy(ctx->stream_name, stream_name, sizeof(ctx->stream_name) - 1);
-    strncpy(ctx->model_path, model_path, sizeof(ctx->model_path) - 1);
+    safe_strcpy(ctx->stream_name, stream_name, sizeof(ctx->stream_name), 0);
+    safe_strcpy(ctx->model_path, model_path, sizeof(ctx->model_path), 0);
     ctx->detection_threshold = threshold;
     ctx->pre_buffer_seconds = pre_buffer_seconds > 0 ? pre_buffer_seconds : 10;
     ctx->post_buffer_seconds = post_buffer_seconds > 0 ? post_buffer_seconds : 5;
@@ -494,7 +495,7 @@ int start_unified_detection_thread(const char *stream_name, const char *model_pa
                                   config.onvif_username[0] ? config.onvif_username : NULL,
                                   config.onvif_password[0] ? config.onvif_password : NULL,
                                   ctx->rtsp_url, sizeof(ctx->rtsp_url)) != 0) {
-            strncpy(ctx->rtsp_url, config.url, sizeof(ctx->rtsp_url) - 1);
+            safe_strcpy(ctx->rtsp_url, config.url, sizeof(ctx->rtsp_url), 0);
         }
     }
 
@@ -988,8 +989,7 @@ static void *unified_detection_thread_func(void *arg) {
     }
 
     char stream_name[MAX_STREAM_NAME];
-    strncpy(stream_name, ctx->stream_name, sizeof(stream_name) - 1);
-    stream_name[sizeof(stream_name) - 1] = '\0';
+    safe_strcpy(stream_name, ctx->stream_name, sizeof(stream_name), 0);
 
     log_set_thread_context("Detection", stream_name);
     log_info("[%s] Unified detection thread started", stream_name);
@@ -1580,7 +1580,7 @@ static int udt_start_recording(unified_detection_ctx_t *ctx) {
     }
 
     // Set trigger type to detection
-    strncpy(ctx->mp4_writer->trigger_type, "detection", sizeof(ctx->mp4_writer->trigger_type) - 1);
+    safe_strcpy(ctx->mp4_writer->trigger_type, "detection", sizeof(ctx->mp4_writer->trigger_type), 0);
 
     // Store recording start time
     ctx->mp4_writer->creation_time = now;
@@ -1588,13 +1588,13 @@ static int udt_start_recording(unified_detection_ctx_t *ctx) {
     // Add recording to database at START (so it appears in recordings list immediately)
     // It will be updated with end_time, size, and is_complete=true when recording stops
     recording_metadata_t metadata = {0};
-    strncpy(metadata.file_path, ctx->current_recording_path, sizeof(metadata.file_path) - 1);
-    strncpy(metadata.stream_name, ctx->stream_name, sizeof(metadata.stream_name) - 1);
+    safe_strcpy(metadata.file_path, ctx->current_recording_path, sizeof(metadata.file_path), 0);
+    safe_strcpy(metadata.stream_name, ctx->stream_name, sizeof(metadata.stream_name), 0);
     metadata.start_time = now;
     metadata.end_time = 0;  // Will be set when recording stops
     metadata.size_bytes = 0;  // Will be set when recording stops
     metadata.is_complete = false;  // Will be set to true when recording stops
-    strncpy(metadata.trigger_type, "detection", sizeof(metadata.trigger_type) - 1);
+    safe_strcpy(metadata.trigger_type, "detection", sizeof(metadata.trigger_type), 0);
 
     ctx->current_recording_id = add_recording_metadata(&metadata);
     if (ctx->current_recording_id > 0) {
@@ -1660,13 +1660,13 @@ static int udt_stop_recording(unified_detection_ctx_t *ctx) {
         // Fallback: if no recording_id, try to add a new record (shouldn't happen normally)
         log_warn("[%s] No recording ID found, creating new database entry", ctx->stream_name);
         recording_metadata_t metadata = {0};
-        strncpy(metadata.file_path, ctx->current_recording_path, sizeof(metadata.file_path) - 1);
-        strncpy(metadata.stream_name, ctx->stream_name, sizeof(metadata.stream_name) - 1);
+        safe_strcpy(metadata.file_path, ctx->current_recording_path, sizeof(metadata.file_path), 0);
+        safe_strcpy(metadata.stream_name, ctx->stream_name, sizeof(metadata.stream_name), 0);
         metadata.start_time = start_time;
         metadata.end_time = end_time;
         metadata.size_bytes = file_size;
         metadata.is_complete = true;
-        strncpy(metadata.trigger_type, "detection", sizeof(metadata.trigger_type) - 1);
+        safe_strcpy(metadata.trigger_type, "detection", sizeof(metadata.trigger_type), 0);
 
         uint64_t recording_id = add_recording_metadata(&metadata);
         if (recording_id > 0) {

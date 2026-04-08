@@ -21,6 +21,7 @@
 #include "core/logger.h"
 #include "core/mqtt_client.h"
 #include "core/path_utils.h"
+#include "utils/strings.h"
 
 // Maximum number of streams to process at once
 #define MAX_STREAMS_BATCH 64
@@ -38,7 +39,6 @@
 #define ORPHAN_SAFETY_THRESHOLD 0.5
 #define MIN_RECORDINGS_FOR_THRESHOLD 10
 #define MP4_SUBDIR "mp4"
-#define MAX_STORAGE_PATH_LENGTH      256
 #define MAX_RECORDING_PATH_LENGTH    768
 
 // Forward declarations
@@ -46,7 +46,7 @@ static int apply_legacy_retention_policy(void);
 
 // Storage manager state
 static struct {
-    char storage_path[MAX_STORAGE_PATH_LENGTH];
+    char storage_path[MAX_PATH_LENGTH];
     uint64_t max_size;
     int retention_days;
     bool auto_delete_oldest;
@@ -118,8 +118,7 @@ int init_storage_manager(const char *storage_path, uint64_t max_size) {
     }
 
     // Copy storage path
-    strncpy(storage_manager.storage_path, storage_path, sizeof(storage_manager.storage_path) - 1);
-    storage_manager.storage_path[sizeof(storage_manager.storage_path) - 1] = '\0';
+    safe_strcpy(storage_manager.storage_path, storage_path, sizeof(storage_manager.storage_path), 0);
 
     // Set maximum size
     storage_manager.max_size = max_size;

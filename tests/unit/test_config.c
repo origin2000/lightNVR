@@ -317,7 +317,7 @@ void test_save_config_accepts_hidden_ini_dotfile(void) {
     char *dir = mkdtemp(temp_dir);
     TEST_ASSERT_NOT_NULL(dir);
 
-    char config_path[512];
+    char config_path[MAX_PATH_LENGTH];
     snprintf(config_path, sizeof(config_path), "%s/.ini", dir);
 
     load_default_config(&cfg);
@@ -349,14 +349,14 @@ void test_env_integer_whitespace_handling(void) {
     char *dir = mkdtemp(temp_dir);
     TEST_ASSERT_NOT_NULL(dir);
 
-    char config_path[512];
-    char storage_path[512];
-    char storage_hls_path[512];
-    char models_path[512];
-    char db_path[512];
-    char web_root[512];
-    char log_path[512];
-    char pid_path[512];
+    char config_path[MAX_PATH_LENGTH];
+    char storage_path[MAX_PATH_LENGTH];
+    char storage_hls_path[MAX_PATH_LENGTH];
+    char models_path[MAX_PATH_LENGTH];
+    char db_path[MAX_PATH_LENGTH];
+    char web_root[MAX_PATH_LENGTH];
+    char log_path[MAX_PATH_LENGTH];
+    char pid_path[MAX_PATH_LENGTH];
 
     snprintf(config_path, sizeof(config_path), "%s/test.ini", dir);
     snprintf(storage_path, sizeof(storage_path), "%s/storage", dir);

@@ -26,6 +26,7 @@
 #include "database/db_backup.h"
 #include "core/config.h"
 #include "core/logger.h"
+#include "utils/strings.h"
 
 // Database handle
 static sqlite3 *db = NULL;
@@ -34,10 +35,10 @@ static sqlite3 *db = NULL;
 static pthread_mutex_t db_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Database path for backup/recovery operations
-static char db_file_path[1024] = {0};
+static char db_file_path[PATH_MAX] = {0};
 
 // Backup file path
-static char db_backup_path[1024] = {0};
+static char db_backup_path[PATH_MAX] = {0};
 
 // Last backup time
 static time_t last_backup_time = 0;
@@ -572,8 +573,7 @@ int init_database(const char *db_path) {
     sqlite3_soft_heap_limit64((sqlite3_int64)8 * 1024 * 1024); // 8MB soft limit
 
     // Store the database path for backup/recovery operations
-    strncpy(db_file_path, db_path, sizeof(db_file_path) - 1);
-    db_file_path[sizeof(db_file_path) - 1] = '\0';
+    safe_strcpy(db_file_path, db_path, sizeof(db_file_path), 0);
 
     // Create backup path by appending .bak to the database path
     snprintf(db_backup_path, sizeof(db_backup_path), "%s.bak", db_path);
@@ -688,33 +688,25 @@ int init_database(const char *db_path) {
 
     // Make a copy of the directory name before freeing dir_path
     char *dir = dirname(dir_path);
-    char *dir_copy = strdup(dir);
-    if (!dir_copy) {
-        log_error("Failed to allocate memory for directory name copy");
-        free(dir_path);
-        return -1;
-    }
 
-    log_info("Creating database directory if needed: %s", dir_copy);
-    if (create_directory(dir_copy) != 0) {
-        log_error("Failed to create database directory: %s", dir_copy);
+    log_info("Creating database directory if needed: %s", dir);
+    if (create_directory(dir) != 0) {
+        log_error("Failed to create database directory: %s", dir);
         free(dir_path);
-        free(dir_copy);
         return -1;
     }
-    free(dir_path);
 
     // Check directory permissions
     struct stat st;
-    if (stat(dir_copy, &st) == 0) {
+    if (stat(dir, &st) == 0) {
         log_info("Database directory permissions: %o", st.st_mode & 0777);
         if ((st.st_mode & 0200) == 0) {
             log_warn("Database directory is not writable");
         }
     }
 
-    // Free the directory name copy
-    free(dir_copy);
+    // Free the directory path, invalidating the dir pointer
+    free(dir_path);
 
     // Open database with extended options for better error handling
     log_info("Opening database at: %s", db_path);

@@ -16,6 +16,7 @@
 #include "video/packet_buffer.h"
 #include "core/logger.h"
 #include "core/config.h"
+#include "utils/strings.h"
 
 // Global buffer pool
 static packet_buffer_pool_t buffer_pool;
@@ -235,7 +236,7 @@ packet_buffer_t* create_packet_buffer(const char *stream_name, int buffer_second
     }
     buffer->mutex_initialized = true;
 
-    strncpy(buffer->stream_name, stream_name, sizeof(buffer->stream_name) - 1);
+    safe_strcpy(buffer->stream_name, stream_name, sizeof(buffer->stream_name), 0);
     buffer->buffer_seconds = buffer_seconds;
     buffer->mode = mode;
 
@@ -314,8 +315,7 @@ void destroy_packet_buffer(packet_buffer_t *buffer) {
     pthread_mutex_unlock(&buffer_pool.pool_mutex);
 
     char stream_name_copy[256];
-    strncpy(stream_name_copy, buffer->stream_name, sizeof(stream_name_copy) - 1);
-    stream_name_copy[sizeof(stream_name_copy) - 1] = '\0';
+    safe_strcpy(stream_name_copy, buffer->stream_name, sizeof(stream_name_copy), 0);
 
     buffer->active = false;
 
@@ -662,7 +662,7 @@ int packet_buffer_set_disk_fallback(packet_buffer_t *buffer, bool enable, const 
     if (enable) {
         buffer->mode = BUFFER_MODE_HYBRID;
         if (disk_path) {
-            strncpy(buffer->disk_buffer_path, disk_path, sizeof(buffer->disk_buffer_path) - 1);
+            safe_strcpy(buffer->disk_buffer_path, disk_path, sizeof(buffer->disk_buffer_path), 0);
         }
         log_info("Enabled disk fallback for buffer: %s (path: %s)",
                  buffer->stream_name, buffer->disk_buffer_path);

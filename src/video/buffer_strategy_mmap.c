@@ -35,6 +35,7 @@
 #include "core/logger.h"
 #include "core/config.h"
 #include "core/path_utils.h"
+#include "utils/strings.h"
 
 // Packet entry in mmap buffer (fixed size for simplicity)
 typedef struct {
@@ -130,7 +131,7 @@ static int create_mmap_file(mmap_strategy_data_t *data, size_t size) {
     data->header->tail = 0;
     data->header->total_size = size;
     data->header->data_offset = sizeof(mmap_buffer_header_t);
-    strncpy(data->header->stream_name, data->stream_name, sizeof(data->header->stream_name) - 1);
+    safe_strcpy(data->header->stream_name, data->stream_name, sizeof(data->header->stream_name), 0);
     
     // Advise kernel about access pattern
     madvise(data->mapped_data, size, MADV_SEQUENTIAL);
@@ -398,12 +399,12 @@ pre_buffer_strategy_t* create_mmap_hybrid_strategy(const char *stream_name,
         return NULL;
     }
 
-    strncpy(data->stream_name, stream_name, sizeof(data->stream_name) - 1);
+    safe_strcpy(data->stream_name, stream_name, sizeof(data->stream_name), 0);
     data->fd = -1;
 
     strategy->name = "mmap_hybrid";
     strategy->type = BUFFER_STRATEGY_MMAP_HYBRID;
-    strncpy(strategy->stream_name, stream_name, sizeof(strategy->stream_name) - 1);
+    safe_strcpy(strategy->stream_name, stream_name, sizeof(strategy->stream_name), 0);
     strategy->private_data = data;
 
     // Set interface methods

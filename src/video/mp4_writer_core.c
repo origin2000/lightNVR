@@ -27,6 +27,7 @@
 #include "database/database_manager.h"
 #include "core/config.h"
 #include "core/logger.h"
+#include "utils/strings.h"
 #include "video/stream_manager.h"
 #include "video/streams.h"
 #include "video/mp4_writer.h"
@@ -46,8 +47,8 @@ mp4_writer_t *mp4_writer_create(const char *output_path, const char *stream_name
     }
 
     // Initialize writer
-    strncpy(writer->output_path, output_path, sizeof(writer->output_path) - 1);
-    strncpy(writer->stream_name, stream_name, sizeof(writer->stream_name) - 1);
+    safe_strcpy(writer->output_path, output_path, sizeof(writer->output_path), 0);
+    safe_strcpy(writer->stream_name, stream_name, sizeof(writer->stream_name), 0);
     writer->first_dts = AV_NOPTS_VALUE;
     writer->first_pts = AV_NOPTS_VALUE;
     writer->last_dts = AV_NOPTS_VALUE;
@@ -56,7 +57,7 @@ mp4_writer_t *mp4_writer_create(const char *output_path, const char *stream_name
     writer->last_packet_time = 0;  // Initialize to 0 to indicate no packets written yet
     writer->has_audio = 1;         // Initialize to 1 to enable audio by default
     writer->current_recording_id = 0; // Initialize to 0 to indicate no recording ID yet
-    strncpy(writer->trigger_type, "scheduled", sizeof(writer->trigger_type) - 1); // Default to scheduled
+    safe_strcpy(writer->trigger_type, "scheduled", sizeof(writer->trigger_type), 0); // Default to scheduled
 
     // Initialize audio state
     writer->audio.stream_idx = -1; // Initialize to -1 to indicate no audio stream
@@ -76,7 +77,7 @@ mp4_writer_t *mp4_writer_create(const char *output_path, const char *stream_name
     writer->shutdown_component_id = -1; // Initialize to -1 to indicate not registered
 
     // Extract output directory from output path
-    strncpy(writer->output_dir, output_path, sizeof(writer->output_dir) - 1);
+    safe_strcpy(writer->output_dir, output_path, sizeof(writer->output_dir), 0);
     char *last_slash = strrchr(writer->output_dir, '/');
     if (last_slash) {
         *last_slash = '\0';  // Truncate at the last slash to get directory

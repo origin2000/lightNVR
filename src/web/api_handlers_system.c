@@ -40,6 +40,7 @@
 #include "core/config.h"
 #include "core/version.h"
 #include "core/shutdown_coordinator.h"
+#include "utils/strings.h"
 #include "video/stream_manager.h"
 #include "database/db_streams.h"
 #include "database/db_recordings.h"
@@ -56,6 +57,7 @@ extern bool get_go2rtc_memory_usage(unsigned long long *memory_usage);
 // External declarations
 extern bool daemon_mode;
 
+// Copies the src string after removing whitespace and single- or double-quotes.
 static void trim_copy_value(char *dest, size_t dest_size, const char *src) {
     if (!dest || dest_size == 0) {
         return;
@@ -66,26 +68,24 @@ static void trim_copy_value(char *dest, size_t dest_size, const char *src) {
         return;
     }
 
-    while (*src && isspace((unsigned char)*src)) {
-        src++;
+    const char *start = ltrim_pos(src);
+    // rtrim_pos returns a pointer into src one *after* the last printing
+    // character, so we need to subtract 1 to check the last characters
+    // in the string.
+    const char *end = rtrim_pos(src, 0) - 1;
+
+    if ((end - start) >= 2 && ((*start == '"' && *end == '"') ||
+                     (*start == '\'' && *end == '\''))) {
+        start++;
+        end--;
     }
 
-    size_t len = strlen(src);
-    while (len > 0 && isspace((unsigned char)src[len - 1])) {
-        len--;
-    }
-
-    if (len >= 2 && ((src[0] == '"' && src[len - 1] == '"') ||
-                     (src[0] == '\'' && src[len - 1] == '\''))) {
-        src++;
-        len -= 2;
-    }
-
+    size_t len = end - start;
     if (len >= dest_size) {
         len = dest_size - 1;
     }
 
-    memcpy(dest, src, len);
+    memcpy(dest, start, len);
     dest[len] = '\0';
 }
 
@@ -1140,13 +1140,13 @@ void handle_get_system_info(const http_request_t *req, http_response_t *res) {
                                     if (ioc_sock >= 0) {
                                         struct ifreq ifr;
                                         memset(&ifr, 0, sizeof(ifr));
-                                        strncpy(ifr.ifr_name, safe_name, IFNAMSIZ - 1);
+                                        safe_strcpy(ifr.ifr_name, safe_name, IFNAMSIZ, 0);
                                         if (ioctl(ioc_sock, SIOCGIFADDR, &ifr) == 0) {
                                             struct sockaddr_in *sin =
                                                 (struct sockaddr_in *)&ifr.ifr_addr;
                                             if (inet_ntop(AF_INET, &sin->sin_addr,
                                                           ip_addr, sizeof(ip_addr)) == NULL) {
-                                                strncpy(ip_addr, "Unknown", sizeof(ip_addr) - 1);
+                                                safe_strcpy(ip_addr, "Unknown", sizeof(ip_addr), 0);
                                             }
                                         }
                                         close(ioc_sock);

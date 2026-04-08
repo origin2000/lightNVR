@@ -21,6 +21,7 @@
 #include "core/config.h"
 #include "core/path_utils.h"
 #include "core/shutdown_coordinator.h"
+#include "utils/strings.h"
 #include "database/database_manager.h"
 #include "database/db_recordings.h"
 #include "database/db_streams.h"
@@ -210,8 +211,7 @@ static motion_recording_context_t* create_recording_context(const char *stream_n
     for (int i = 0; i < g_config.max_streams; i++) {
         if (!recording_contexts[i].active) {
             memset(&recording_contexts[i], 0, sizeof(motion_recording_context_t));
-            strncpy(recording_contexts[i].stream_name, stream_name, MAX_STREAM_NAME - 1);
-            recording_contexts[i].stream_name[MAX_STREAM_NAME - 1] = '\0';
+            safe_strcpy(recording_contexts[i].stream_name, stream_name, MAX_STREAM_NAME, 0);
             recording_contexts[i].state = RECORDING_STATE_IDLE;
             recording_contexts[i].active = true;
             
@@ -828,12 +828,11 @@ int process_motion_event(const char *stream_name, bool motion_detected, time_t t
     // Create motion event
     motion_event_t event;
     memset(&event, 0, sizeof(motion_event_t));
-    strncpy(event.stream_name, stream_name, MAX_STREAM_NAME - 1);
-    event.stream_name[MAX_STREAM_NAME - 1] = '\0';
+    safe_strcpy(event.stream_name, stream_name, MAX_STREAM_NAME, 0);
     event.timestamp = timestamp;
     event.active = motion_detected;
     event.confidence = 1.0f;
-    strncpy(event.event_type, "motion", sizeof(event.event_type) - 1);
+    safe_strcpy(event.event_type, "motion", sizeof(event.event_type), 0);
 
     // Push to event queue
     if (push_event(&event) != 0) {
@@ -865,12 +864,11 @@ int process_motion_event(const char *stream_name, bool motion_detected, time_t t
                 // Path A: ONVIF event queue (for ONVIF-managed slave streams)
                 motion_event_t linked_event;
                 memset(&linked_event, 0, sizeof(motion_event_t));
-                strncpy(linked_event.stream_name, all_streams[i].name, MAX_STREAM_NAME - 1);
-                linked_event.stream_name[MAX_STREAM_NAME - 1] = '\0';
+                safe_strcpy(linked_event.stream_name, all_streams[i].name, MAX_STREAM_NAME, 0);
                 linked_event.timestamp = timestamp;
                 linked_event.active = motion_detected;
                 linked_event.confidence = 1.0f;
-                strncpy(linked_event.event_type, "motion", sizeof(linked_event.event_type) - 1);
+                safe_strcpy(linked_event.event_type, "motion", sizeof(linked_event.event_type), 0);
 
                 if (push_event(&linked_event) != 0) {
                     log_error("Failed to push linked motion event to stream: %s (triggered by: %s)",
@@ -999,8 +997,7 @@ int get_current_motion_recording_path(const char *stream_name, char *path, size_
 
     pthread_mutex_lock(&ctx->mutex);
     if (ctx->current_file_path[0] != '\0') {
-        strncpy(path, ctx->current_file_path, path_size - 1);
-        path[path_size - 1] = '\0';
+        safe_strcpy(path, ctx->current_file_path, path_size, 0);
         pthread_mutex_unlock(&ctx->mutex);
         return 0;
     }

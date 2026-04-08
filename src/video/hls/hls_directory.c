@@ -11,6 +11,7 @@
 #include "core/logger.h"
 #include "core/config.h"
 #include "core/path_utils.h"
+#include "utils/strings.h"
 #include "video/streams.h"
 #include "video/hls/hls_directory.h"
 #include "video/hls/hls_context.h"
@@ -60,8 +61,7 @@ int ensure_hls_directory(const char *output_dir, const char *stream_name) {
 
         // Recreate it using direct C functions to handle paths with spaces
         char temp_path[MAX_PATH_LENGTH];
-        strncpy(temp_path, output_dir, MAX_PATH_LENGTH - 1);
-        temp_path[MAX_PATH_LENGTH - 1] = '\0';
+        safe_strcpy(temp_path, output_dir, MAX_PATH_LENGTH, 0);
 
         // Create parent directories one by one
         for (char *p = temp_path + 1; *p; p++) {
@@ -129,13 +129,12 @@ int ensure_hls_directory(const char *output_dir, const char *stream_name) {
     if (last_slash) {
         char parent_dir[MAX_PATH_LENGTH];
         size_t parent_len = last_slash - output_dir;
-        strncpy(parent_dir, output_dir, parent_len);
+        safe_strcpy(parent_dir, output_dir, MAX_PATH_LENGTH, parent_len);
         parent_dir[parent_len] = '\0';
 
         // Create parent directory using direct C functions
         char temp_path[MAX_PATH_LENGTH];
-        strncpy(temp_path, parent_dir, MAX_PATH_LENGTH - 1);
-        temp_path[MAX_PATH_LENGTH - 1] = '\0';
+        safe_strcpy(temp_path, parent_dir, MAX_PATH_LENGTH, 0);
 
         // Create parent directories one by one
         for (char *p = temp_path + 1; *p; p++) {
@@ -167,8 +166,7 @@ int ensure_hls_directory(const char *output_dir, const char *stream_name) {
 
             // Try to create parent directory with full permissions using direct C functions
             char retry_path[MAX_PATH_LENGTH];
-            strncpy(retry_path, parent_dir, MAX_PATH_LENGTH - 1);
-            retry_path[MAX_PATH_LENGTH - 1] = '\0';
+            safe_strcpy(retry_path, parent_dir, MAX_PATH_LENGTH, 0);
 
             // Create parent directories one by one
             for (char *p = retry_path + 1; *p; p++) {

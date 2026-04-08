@@ -19,6 +19,7 @@
 #include <libavutil/time.h>
 
 #include "core/logger.h"
+#include "utils/strings.h"
 #include "video/hls_writer.h"
 #include "video/detection_integration.h"
 #include "video/detection_frame_processing.h"
@@ -99,8 +100,7 @@ static void cleanup_old_segments(const char *output_dir, int max_segments) {
         // Get file stats
         snprintf(filepath, sizeof(filepath), "%s/%s", output_dir, entry->d_name);
         if (stat(filepath, &st) == 0) {
-            strncpy(segments[i].filename, entry->d_name, 255);
-            segments[i].filename[255] = '\0';
+            safe_strcpy(segments[i].filename, entry->d_name, 256, 0);
             segments[i].mtime = st.st_mtime;
             i++;
         }
@@ -164,8 +164,8 @@ hls_writer_t *hls_writer_create(const char *output_dir, const char *stream_name,
     }
 
     // Copy output directory and stream name
-    strncpy(writer->output_dir, output_dir, MAX_PATH_LENGTH - 1);
-    strncpy(writer->stream_name, stream_name, MAX_STREAM_NAME - 1);
+    safe_strcpy(writer->output_dir, output_dir, MAX_PATH_LENGTH, 0);
+    safe_strcpy(writer->stream_name, stream_name, MAX_STREAM_NAME, 0);
 
     //  Ensure segment duration is reasonable but allow lower values for lower latency
     if (segment_duration < 1) {
@@ -408,8 +408,7 @@ static int ensure_output_directory(hls_writer_t *writer) {
                 dir_path, safe_dir_path);
 
         // Update the writer's output_dir field with the safe path
-        strncpy(writer->output_dir, safe_dir_path, MAX_PATH_LENGTH - 1);
-        writer->output_dir[MAX_PATH_LENGTH - 1] = '\0';
+        safe_strcpy(writer->output_dir, safe_dir_path, MAX_PATH_LENGTH, 0);
     }
 
     // Always use the safe path
@@ -421,8 +420,7 @@ static int ensure_output_directory(hls_writer_t *writer) {
 
         // Create directory using direct C functions to handle paths with spaces
         char temp_path[MAX_PATH_LENGTH];
-        strncpy(temp_path, dir_path, MAX_PATH_LENGTH - 1);
-        temp_path[MAX_PATH_LENGTH - 1] = '\0';
+        safe_strcpy(temp_path, dir_path, MAX_PATH_LENGTH, 0);
 
         // Create parent directories one by one
         for (char *p = temp_path + 1; *p; p++) {
@@ -936,12 +934,11 @@ void hls_writer_close(hls_writer_t *writer) {
     __sync_synchronize();
 
     // Store stream name for logging - use a local copy to avoid potential race conditions
-    char stream_name[MAX_STREAM_NAME] = {0};
+    char stream_name[MAX_STREAM_NAME];
 
     // Copy stream name for logging; fall back to "unknown" if not yet set
     if (writer->stream_name[0] != '\0') {
-        strncpy(stream_name, writer->stream_name, MAX_STREAM_NAME - 1);
-        stream_name[MAX_STREAM_NAME - 1] = '\0';
+        safe_strcpy(stream_name, writer->stream_name, MAX_STREAM_NAME, 0);
     } else {
         strcpy(stream_name, "unknown");
     }

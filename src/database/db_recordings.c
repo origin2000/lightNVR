@@ -14,29 +14,10 @@
 #include "database/db_recordings.h"
 #include "database/db_core.h"
 #include "core/logger.h"
+#include "utils/strings.h"
 
 #define MAX_MULTI_FILTER_VALUES 32
 #define MAX_MULTI_FILTER_VALUE_LEN 128
-
-static void trim_whitespace(char *value) {
-    if (!value) {
-        return;
-    }
-
-    char *start = value;
-    while (*start && isspace((unsigned char)*start)) {
-        start++;
-    }
-
-    if (start != value) {
-        memmove(value, start, strlen(start) + 1);
-    }
-
-    size_t len = strlen(value);
-    while (len > 0 && isspace((unsigned char)value[len - 1])) {
-        value[--len] = '\0';
-    }
-}
 
 static int parse_csv_filter_values(const char *csv,
                                    char values[][MAX_MULTI_FILTER_VALUE_LEN],
@@ -46,15 +27,14 @@ static int parse_csv_filter_values(const char *csv,
     }
 
     char buffer[MAX_MULTI_FILTER_VALUES * MAX_MULTI_FILTER_VALUE_LEN];
-    strncpy(buffer, csv, sizeof(buffer) - 1);
-    buffer[sizeof(buffer) - 1] = '\0';
+    safe_strcpy(buffer, csv, sizeof(buffer), 0);
 
     int count = 0;
     char *saveptr = NULL;
     char *token = strtok_r(buffer, ",", &saveptr);
 
     while (token && count < max_values) {
-        trim_whitespace(token);
+        token = trim_ascii_whitespace(token);
         if (*token) {
             bool duplicate = false;
             for (int i = 0; i < count; i++) {
@@ -65,8 +45,7 @@ static int parse_csv_filter_values(const char *csv,
             }
 
             if (!duplicate) {
-                strncpy(values[count], token, MAX_MULTI_FILTER_VALUE_LEN - 1);
-                values[count][MAX_MULTI_FILTER_VALUE_LEN - 1] = '\0';
+                safe_strcpy(values[count], token, MAX_MULTI_FILTER_VALUE_LEN, 0);
                 count++;
             }
         }
@@ -299,16 +278,14 @@ int get_recording_metadata_by_id(uint64_t id, recording_metadata_t *metadata) {
 
         const char *stream = (const char *)sqlite3_column_text(stmt, 1);
         if (stream) {
-            strncpy(metadata->stream_name, stream, sizeof(metadata->stream_name) - 1);
-            metadata->stream_name[sizeof(metadata->stream_name) - 1] = '\0';
+            safe_strcpy(metadata->stream_name, stream, sizeof(metadata->stream_name), 0);
         } else {
             metadata->stream_name[0] = '\0';
         }
 
         const char *path = (const char *)sqlite3_column_text(stmt, 2);
         if (path) {
-            strncpy(metadata->file_path, path, sizeof(metadata->file_path) - 1);
-            metadata->file_path[sizeof(metadata->file_path) - 1] = '\0';
+            safe_strcpy(metadata->file_path, path, sizeof(metadata->file_path), 0);
         } else {
             metadata->file_path[0] = '\0';
         }
@@ -328,8 +305,7 @@ int get_recording_metadata_by_id(uint64_t id, recording_metadata_t *metadata) {
 
         const char *codec = (const char *)sqlite3_column_text(stmt, 9);
         if (codec) {
-            strncpy(metadata->codec, codec, sizeof(metadata->codec) - 1);
-            metadata->codec[sizeof(metadata->codec) - 1] = '\0';
+            safe_strcpy(metadata->codec, codec, sizeof(metadata->codec), 0);
         } else {
             metadata->codec[0] = '\0';
         }
@@ -338,10 +314,9 @@ int get_recording_metadata_by_id(uint64_t id, recording_metadata_t *metadata) {
 
         const char *trigger_type = (const char *)sqlite3_column_text(stmt, 11);
         if (trigger_type) {
-            strncpy(metadata->trigger_type, trigger_type, sizeof(metadata->trigger_type) - 1);
-            metadata->trigger_type[sizeof(metadata->trigger_type) - 1] = '\0';
+            safe_strcpy(metadata->trigger_type, trigger_type, sizeof(metadata->trigger_type), 0);
         } else {
-            strncpy(metadata->trigger_type, "scheduled", sizeof(metadata->trigger_type) - 1);
+            safe_strcpy(metadata->trigger_type, "scheduled", sizeof(metadata->trigger_type), 0);
         }
 
         metadata->protected = sqlite3_column_int(stmt, 12) != 0;
@@ -407,16 +382,14 @@ int get_recording_metadata_by_path(const char *file_path, recording_metadata_t *
 
         const char *stream = (const char *)sqlite3_column_text(stmt, 1);
         if (stream) {
-            strncpy(metadata->stream_name, stream, sizeof(metadata->stream_name) - 1);
-            metadata->stream_name[sizeof(metadata->stream_name) - 1] = '\0';
+            safe_strcpy(metadata->stream_name, stream, sizeof(metadata->stream_name), 0);
         } else {
             metadata->stream_name[0] = '\0';
         }
 
         const char *path = (const char *)sqlite3_column_text(stmt, 2);
         if (path) {
-            strncpy(metadata->file_path, path, sizeof(metadata->file_path) - 1);
-            metadata->file_path[sizeof(metadata->file_path) - 1] = '\0';
+            safe_strcpy(metadata->file_path, path, sizeof(metadata->file_path), 0);
         } else {
             metadata->file_path[0] = '\0';
         }
@@ -436,8 +409,7 @@ int get_recording_metadata_by_path(const char *file_path, recording_metadata_t *
 
         const char *codec = (const char *)sqlite3_column_text(stmt, 9);
         if (codec) {
-            strncpy(metadata->codec, codec, sizeof(metadata->codec) - 1);
-            metadata->codec[sizeof(metadata->codec) - 1] = '\0';
+            safe_strcpy(metadata->codec, codec, sizeof(metadata->codec), 0);
         } else {
             metadata->codec[0] = '\0';
         }
@@ -446,10 +418,9 @@ int get_recording_metadata_by_path(const char *file_path, recording_metadata_t *
 
         const char *trigger_type = (const char *)sqlite3_column_text(stmt, 11);
         if (trigger_type) {
-            strncpy(metadata->trigger_type, trigger_type, sizeof(metadata->trigger_type) - 1);
-            metadata->trigger_type[sizeof(metadata->trigger_type) - 1] = '\0';
+            safe_strcpy(metadata->trigger_type, trigger_type, sizeof(metadata->trigger_type), 0);
         } else {
-            strncpy(metadata->trigger_type, "scheduled", sizeof(metadata->trigger_type) - 1);
+            safe_strcpy(metadata->trigger_type, "scheduled", sizeof(metadata->trigger_type), 0);
         }
 
         metadata->protected = sqlite3_column_int(stmt, 12) != 0;
@@ -505,18 +476,18 @@ int get_recording_metadata(time_t start_time, time_t end_time,
                  "FROM recordings WHERE is_complete = 1 AND end_time IS NOT NULL"); // Only complete recordings with end_time set
 
     if (start_time > 0) {
-        strncat(sql, " AND start_time >= ?", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND start_time >= ?", sizeof(sql));
     }
 
     if (end_time > 0) {
-        strncat(sql, " AND start_time <= ?", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND start_time <= ?", sizeof(sql));
     }
 
     if (stream_name) {
-        strncat(sql, " AND stream_name = ?", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND stream_name = ?", sizeof(sql));
     }
 
-    strncat(sql, " ORDER BY start_time DESC LIMIT ?;", sizeof(sql) - strlen(sql) - 1);
+    safe_strcat(sql, " ORDER BY start_time DESC LIMIT ?;", sizeof(sql));
 
     rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
@@ -553,16 +524,14 @@ int get_recording_metadata(time_t start_time, time_t end_time,
 
             const char *stream = (const char *)sqlite3_column_text(stmt, 1);
             if (stream) {
-                strncpy(metadata[count].stream_name, stream, sizeof(metadata[count].stream_name) - 1);
-                metadata[count].stream_name[sizeof(metadata[count].stream_name) - 1] = '\0';
+                safe_strcpy(metadata[count].stream_name, stream, sizeof(metadata[count].stream_name), 0);
             } else {
                 metadata[count].stream_name[0] = '\0';
             }
 
             const char *path = (const char *)sqlite3_column_text(stmt, 2);
             if (path) {
-                strncpy(metadata[count].file_path, path, sizeof(metadata[count].file_path) - 1);
-                metadata[count].file_path[sizeof(metadata[count].file_path) - 1] = '\0';
+                safe_strcpy(metadata[count].file_path, path, sizeof(metadata[count].file_path), 0);
             } else {
                 metadata[count].file_path[0] = '\0';
             }
@@ -582,8 +551,7 @@ int get_recording_metadata(time_t start_time, time_t end_time,
 
             const char *codec = (const char *)sqlite3_column_text(stmt, 9);
             if (codec) {
-                strncpy(metadata[count].codec, codec, sizeof(metadata[count].codec) - 1);
-                metadata[count].codec[sizeof(metadata[count].codec) - 1] = '\0';
+                safe_strcpy(metadata[count].codec, codec, sizeof(metadata[count].codec), 0);
             } else {
                 metadata[count].codec[0] = '\0';
             }
@@ -592,10 +560,9 @@ int get_recording_metadata(time_t start_time, time_t end_time,
 
             const char *trigger_type = (const char *)sqlite3_column_text(stmt, 11);
             if (trigger_type) {
-                strncpy(metadata[count].trigger_type, trigger_type, sizeof(metadata[count].trigger_type) - 1);
-                metadata[count].trigger_type[sizeof(metadata[count].trigger_type) - 1] = '\0';
+                safe_strcpy(metadata[count].trigger_type, trigger_type, sizeof(metadata[count].trigger_type), 0);
             } else {
-                strncpy(metadata[count].trigger_type, "scheduled", sizeof(metadata[count].trigger_type) - 1);
+                safe_strcpy(metadata[count].trigger_type, "scheduled", sizeof(metadata[count].trigger_type), 0);
             }
 
             metadata[count].protected = sqlite3_column_int(stmt, 12) != 0;
@@ -664,96 +631,96 @@ int get_recording_count(time_t start_time, time_t end_time,
     if (has_detection == 1) {
         // Filter by trigger_type = 'detection' OR existence of linked detections via recording_id (fast index lookup)
         // Falls back to timestamp range scan for legacy detections without recording_id
-        strncat(sql, " AND (r.trigger_type = 'detection'"
+        safe_strcat(sql, " AND (r.trigger_type = 'detection'"
                     " OR EXISTS (SELECT 1 FROM detections d WHERE d.recording_id = r.id)"
                     " OR EXISTS (SELECT 1 FROM detections d WHERE d.stream_name = r.stream_name"
                     " AND d.timestamp >= r.start_time AND d.timestamp <= r.end_time))",
-                    sizeof(sql) - strlen(sql) - 1);
+                    sizeof(sql));
         log_debug("Adding detection filter (trigger_type OR recording_id OR timestamp range)");
     } else if (has_detection == -1) {
         // Filter to recordings with NO detections
-        strncat(sql, " AND (r.trigger_type != 'detection' OR r.trigger_type IS NULL)"
+        safe_strcat(sql, " AND (r.trigger_type != 'detection' OR r.trigger_type IS NULL)"
                     " AND NOT EXISTS (SELECT 1 FROM detections d WHERE d.recording_id = r.id)"
                     " AND NOT EXISTS (SELECT 1 FROM detections d WHERE d.stream_name = r.stream_name"
                     " AND d.timestamp >= r.start_time AND d.timestamp <= r.end_time)",
-                    sizeof(sql) - strlen(sql) - 1);
+                    sizeof(sql));
         log_debug("Adding no-detection filter (no trigger_type AND no linked detections)");
     }
 
     if (detection_label_count > 0) {
         // Filter by specific detection label - prefer recording_id FK lookup, fall back to timestamp range
-        strncat(sql, " AND (EXISTS (SELECT 1 FROM detections d WHERE d.recording_id = r.id AND (",
-                sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND (EXISTS (SELECT 1 FROM detections d WHERE d.recording_id = r.id AND (",
+                sizeof(sql));
         for (int i = 0; i < detection_label_count; i++) {
-            if (i > 0) strncat(sql, " OR ", sizeof(sql) - strlen(sql) - 1);
-            strncat(sql, "d.label LIKE ?", sizeof(sql) - strlen(sql) - 1);
+            if (i > 0) safe_strcat(sql, " OR ", sizeof(sql));
+            safe_strcat(sql, "d.label LIKE ?", sizeof(sql));
         }
-        strncat(sql, ")) OR EXISTS (SELECT 1 FROM detections d WHERE d.recording_id IS NULL"
+        safe_strcat(sql, ")) OR EXISTS (SELECT 1 FROM detections d WHERE d.recording_id IS NULL"
                     " AND d.stream_name = r.stream_name AND d.timestamp >= r.start_time"
                     " AND d.timestamp <= r.end_time AND (",
-                    sizeof(sql) - strlen(sql) - 1);
+                    sizeof(sql));
         for (int i = 0; i < detection_label_count; i++) {
-            if (i > 0) strncat(sql, " OR ", sizeof(sql) - strlen(sql) - 1);
-            strncat(sql, "d.label LIKE ?", sizeof(sql) - strlen(sql) - 1);
+            if (i > 0) safe_strcat(sql, " OR ", sizeof(sql));
+            safe_strcat(sql, "d.label LIKE ?", sizeof(sql));
         }
-        strncat(sql, ")))", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, ")))", sizeof(sql));
         log_debug("Adding %d detection_label filters", detection_label_count);
     }
 
     if (start_time > 0) {
-        strncat(sql, " AND r.start_time >= ?", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND r.start_time >= ?", sizeof(sql));
         log_debug("Adding start_time filter: %ld", (long)start_time);
     }
 
     if (end_time > 0) {
-        strncat(sql, " AND r.start_time <= ?", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND r.start_time <= ?", sizeof(sql));
         log_debug("Adding end_time filter: %ld", (long)end_time);
     }
 
     if (stream_filter_count > 0) {
-        strncat(sql, " AND r.stream_name IN (", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND r.stream_name IN (", sizeof(sql));
         for (int i = 0; i < stream_filter_count; i++) {
-            if (i > 0) strncat(sql, ",", sizeof(sql) - strlen(sql) - 1);
-            strncat(sql, "?", sizeof(sql) - strlen(sql) - 1);
+            if (i > 0) safe_strcat(sql, ",", sizeof(sql));
+            safe_strcat(sql, "?", sizeof(sql));
         }
-        strncat(sql, ")", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, ")", sizeof(sql));
     } else if (allowed_streams && allowed_streams_count > 0) {
         // Tag-based RBAC: restrict to the user's whitelisted streams via IN clause
-        strncat(sql, " AND r.stream_name IN (", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND r.stream_name IN (", sizeof(sql));
         for (int i = 0; i < allowed_streams_count; i++) {
-            if (i > 0) strncat(sql, ",", sizeof(sql) - strlen(sql) - 1);
-            strncat(sql, "?", sizeof(sql) - strlen(sql) - 1);
+            if (i > 0) safe_strcat(sql, ",", sizeof(sql));
+            safe_strcat(sql, "?", sizeof(sql));
         }
-        strncat(sql, ")", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, ")", sizeof(sql));
         log_debug("Adding allowed_streams IN filter (%d streams)", allowed_streams_count);
     }
 
     if (protected_filter == 0) {
-        strncat(sql, " AND r.protected = 0", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND r.protected = 0", sizeof(sql));
         log_debug("Adding protected_filter=0 (unprotected only)");
     } else if (protected_filter == 1) {
-        strncat(sql, " AND r.protected = 1", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND r.protected = 1", sizeof(sql));
         log_debug("Adding protected_filter=1 (protected only)");
     }
 
     if (tag_filter_count > 0) {
-        strncat(sql, " AND EXISTS (SELECT 1 FROM recording_tags rt WHERE rt.recording_id = r.id AND rt.tag IN (",
-                sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND EXISTS (SELECT 1 FROM recording_tags rt WHERE rt.recording_id = r.id AND rt.tag IN (",
+                sizeof(sql));
         for (int i = 0; i < tag_filter_count; i++) {
-            if (i > 0) strncat(sql, ",", sizeof(sql) - strlen(sql) - 1);
-            strncat(sql, "?", sizeof(sql) - strlen(sql) - 1);
+            if (i > 0) safe_strcat(sql, ",", sizeof(sql));
+            safe_strcat(sql, "?", sizeof(sql));
         }
-        strncat(sql, "))", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, "))", sizeof(sql));
         log_debug("Adding %d tag filters", tag_filter_count);
     }
 
     if (capture_method_count > 0) {
-        strncat(sql, " AND COALESCE(r.trigger_type, 'scheduled') IN (", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND COALESCE(r.trigger_type, 'scheduled') IN (", sizeof(sql));
         for (int i = 0; i < capture_method_count; i++) {
-            if (i > 0) strncat(sql, ",", sizeof(sql) - strlen(sql) - 1);
-            strncat(sql, "?", sizeof(sql) - strlen(sql) - 1);
+            if (i > 0) safe_strcat(sql, ",", sizeof(sql));
+            safe_strcat(sql, "?", sizeof(sql));
         }
-        strncat(sql, ")", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, ")", sizeof(sql));
         log_debug("Adding %d capture_method filters", capture_method_count);
     }
 
@@ -871,8 +838,7 @@ int get_recording_metadata_paginated(time_t start_time, time_t end_time,
             strcmp(sort_field, "start_time") == 0 ||
             strcmp(sort_field, "end_time") == 0 ||
             strcmp(sort_field, "size_bytes") == 0) {
-            strncpy(safe_sort_field, sort_field, sizeof(safe_sort_field) - 1);
-            safe_sort_field[sizeof(safe_sort_field) - 1] = '\0';
+            safe_strcpy(safe_sort_field, sort_field, sizeof(safe_sort_field), 0);
         } else {
             log_warn("Invalid sort field: %s, using default", sort_field);
         }
@@ -903,108 +869,108 @@ int get_recording_metadata_paginated(time_t start_time, time_t end_time,
     if (has_detection == 1) {
         // Filter by trigger_type = 'detection' OR existence of linked detections via recording_id (fast index lookup)
         // Falls back to timestamp range scan for legacy detections without recording_id
-        strncat(sql, " AND (r.trigger_type = 'detection'"
+        safe_strcat(sql, " AND (r.trigger_type = 'detection'"
                     " OR EXISTS (SELECT 1 FROM detections d WHERE d.recording_id = r.id)"
                     " OR EXISTS (SELECT 1 FROM detections d WHERE d.stream_name = r.stream_name"
                     " AND d.timestamp >= r.start_time AND d.timestamp <= r.end_time))",
-                    sizeof(sql) - strlen(sql) - 1);
+                    sizeof(sql));
         log_info("Adding detection filter (trigger_type OR recording_id OR timestamp range)");
     } else if (has_detection == -1) {
         // Filter to recordings with NO detections
-        strncat(sql, " AND (r.trigger_type != 'detection' OR r.trigger_type IS NULL)"
+        safe_strcat(sql, " AND (r.trigger_type != 'detection' OR r.trigger_type IS NULL)"
                     " AND NOT EXISTS (SELECT 1 FROM detections d WHERE d.recording_id = r.id)"
                     " AND NOT EXISTS (SELECT 1 FROM detections d WHERE d.stream_name = r.stream_name"
                     " AND d.timestamp >= r.start_time AND d.timestamp <= r.end_time)",
-                    sizeof(sql) - strlen(sql) - 1);
+                    sizeof(sql));
         log_info("Adding no-detection filter (no trigger_type AND no linked detections)");
     }
 
     if (detection_label_count > 0) {
         // Filter by specific detection label - prefer recording_id FK lookup, fall back to timestamp range
-        strncat(sql, " AND (EXISTS (SELECT 1 FROM detections d WHERE d.recording_id = r.id AND (",
-                sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND (EXISTS (SELECT 1 FROM detections d WHERE d.recording_id = r.id AND (",
+                sizeof(sql));
         for (int i = 0; i < detection_label_count; i++) {
-            if (i > 0) strncat(sql, " OR ", sizeof(sql) - strlen(sql) - 1);
-            strncat(sql, "d.label LIKE ?", sizeof(sql) - strlen(sql) - 1);
+            if (i > 0) safe_strcat(sql, " OR ", sizeof(sql));
+            safe_strcat(sql, "d.label LIKE ?", sizeof(sql));
         }
-        strncat(sql, ")) OR EXISTS (SELECT 1 FROM detections d WHERE d.recording_id IS NULL"
+        safe_strcat(sql, ")) OR EXISTS (SELECT 1 FROM detections d WHERE d.recording_id IS NULL"
                     " AND d.stream_name = r.stream_name AND d.timestamp >= r.start_time"
                     " AND d.timestamp <= r.end_time AND (",
-                    sizeof(sql) - strlen(sql) - 1);
+                    sizeof(sql));
         for (int i = 0; i < detection_label_count; i++) {
-            if (i > 0) strncat(sql, " OR ", sizeof(sql) - strlen(sql) - 1);
-            strncat(sql, "d.label LIKE ?", sizeof(sql) - strlen(sql) - 1);
+            if (i > 0) safe_strcat(sql, " OR ", sizeof(sql));
+            safe_strcat(sql, "d.label LIKE ?", sizeof(sql));
         }
-        strncat(sql, ")))", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, ")))", sizeof(sql));
         log_info("Adding %d detection_label filters", detection_label_count);
     }
 
     if (start_time > 0) {
-        strncat(sql, " AND r.start_time >= ?", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND r.start_time >= ?", sizeof(sql));
         log_info("Adding start_time filter to paginated query: %ld", (long)start_time);
     }
 
     if (end_time > 0) {
-        strncat(sql, " AND r.start_time <= ?", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND r.start_time <= ?", sizeof(sql));
         log_info("Adding end_time filter to paginated query: %ld", (long)end_time);
     }
 
     if (stream_filter_count > 0) {
-        strncat(sql, " AND r.stream_name IN (", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND r.stream_name IN (", sizeof(sql));
         for (int i = 0; i < stream_filter_count; i++) {
-            if (i > 0) strncat(sql, ",", sizeof(sql) - strlen(sql) - 1);
-            strncat(sql, "?", sizeof(sql) - strlen(sql) - 1);
+            if (i > 0) safe_strcat(sql, ",", sizeof(sql));
+            safe_strcat(sql, "?", sizeof(sql));
         }
-        strncat(sql, ")", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, ")", sizeof(sql));
     } else if (allowed_streams && allowed_streams_count > 0) {
         // Tag-based RBAC: restrict to the user's whitelisted streams via IN clause
-        strncat(sql, " AND r.stream_name IN (", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND r.stream_name IN (", sizeof(sql));
         for (int i = 0; i < allowed_streams_count; i++) {
-            if (i > 0) strncat(sql, ",", sizeof(sql) - strlen(sql) - 1);
-            strncat(sql, "?", sizeof(sql) - strlen(sql) - 1);
+            if (i > 0) safe_strcat(sql, ",", sizeof(sql));
+            safe_strcat(sql, "?", sizeof(sql));
         }
-        strncat(sql, ")", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, ")", sizeof(sql));
         log_debug("Adding allowed_streams IN filter (%d streams) to paginated query", allowed_streams_count);
     }
 
     if (protected_filter == 0) {
-        strncat(sql, " AND r.protected = 0", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND r.protected = 0", sizeof(sql));
         log_debug("Adding protected_filter=0 (unprotected only) to paginated query");
     } else if (protected_filter == 1) {
-        strncat(sql, " AND r.protected = 1", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND r.protected = 1", sizeof(sql));
         log_debug("Adding protected_filter=1 (protected only) to paginated query");
     }
 
     if (tag_filter_count > 0) {
-        strncat(sql, " AND EXISTS (SELECT 1 FROM recording_tags rt WHERE rt.recording_id = r.id AND rt.tag IN (",
-                sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND EXISTS (SELECT 1 FROM recording_tags rt WHERE rt.recording_id = r.id AND rt.tag IN (",
+                sizeof(sql));
         for (int i = 0; i < tag_filter_count; i++) {
-            if (i > 0) strncat(sql, ",", sizeof(sql) - strlen(sql) - 1);
-            strncat(sql, "?", sizeof(sql) - strlen(sql) - 1);
+            if (i > 0) safe_strcat(sql, ",", sizeof(sql));
+            safe_strcat(sql, "?", sizeof(sql));
         }
-        strncat(sql, "))", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, "))", sizeof(sql));
         log_debug("Adding %d tag filters to paginated query", tag_filter_count);
     }
 
     if (capture_method_count > 0) {
-        strncat(sql, " AND COALESCE(r.trigger_type, 'scheduled') IN (", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, " AND COALESCE(r.trigger_type, 'scheduled') IN (", sizeof(sql));
         for (int i = 0; i < capture_method_count; i++) {
-            if (i > 0) strncat(sql, ",", sizeof(sql) - strlen(sql) - 1);
-            strncat(sql, "?", sizeof(sql) - strlen(sql) - 1);
+            if (i > 0) safe_strcat(sql, ",", sizeof(sql));
+            safe_strcat(sql, "?", sizeof(sql));
         }
-        strncat(sql, ")", sizeof(sql) - strlen(sql) - 1);
+        safe_strcat(sql, ")", sizeof(sql));
         log_debug("Adding %d capture_method filters to paginated query", capture_method_count);
     }
 
     // Add ORDER BY clause with sanitized field and order
     char order_clause[64];
     snprintf(order_clause, sizeof(order_clause), " ORDER BY r.%s %s", safe_sort_field, safe_sort_order);
-    strncat(sql, order_clause, sizeof(sql) - strlen(sql) - 1);
+    safe_strcat(sql, order_clause, sizeof(sql));
 
     // Add LIMIT and OFFSET for pagination
     char limit_clause[64];
     snprintf(limit_clause, sizeof(limit_clause), " LIMIT ? OFFSET ?");
-    strncat(sql, limit_clause, sizeof(sql) - strlen(sql) - 1);
+    safe_strcat(sql, limit_clause, sizeof(sql));
 
     log_debug("SQL query for get_recording_metadata_paginated: %s", sql);
 
@@ -1072,16 +1038,14 @@ int get_recording_metadata_paginated(time_t start_time, time_t end_time,
 
             const char *stream = (const char *)sqlite3_column_text(stmt, 1);
             if (stream) {
-                strncpy(metadata[count].stream_name, stream, sizeof(metadata[count].stream_name) - 1);
-                metadata[count].stream_name[sizeof(metadata[count].stream_name) - 1] = '\0';
+                safe_strcpy(metadata[count].stream_name, stream, sizeof(metadata[count].stream_name), 0);
             } else {
                 metadata[count].stream_name[0] = '\0';
             }
 
             const char *path = (const char *)sqlite3_column_text(stmt, 2);
             if (path) {
-                strncpy(metadata[count].file_path, path, sizeof(metadata[count].file_path) - 1);
-                metadata[count].file_path[sizeof(metadata[count].file_path) - 1] = '\0';
+                safe_strcpy(metadata[count].file_path, path, sizeof(metadata[count].file_path), 0);
             } else {
                 metadata[count].file_path[0] = '\0';
             }
@@ -1101,8 +1065,7 @@ int get_recording_metadata_paginated(time_t start_time, time_t end_time,
 
             const char *codec = (const char *)sqlite3_column_text(stmt, 9);
             if (codec) {
-                strncpy(metadata[count].codec, codec, sizeof(metadata[count].codec) - 1);
-                metadata[count].codec[sizeof(metadata[count].codec) - 1] = '\0';
+                safe_strcpy(metadata[count].codec, codec, sizeof(metadata[count].codec), 0);
             } else {
                 metadata[count].codec[0] = '\0';
             }
@@ -1111,10 +1074,9 @@ int get_recording_metadata_paginated(time_t start_time, time_t end_time,
 
             const char *trigger_type = (const char *)sqlite3_column_text(stmt, 11);
             if (trigger_type) {
-                strncpy(metadata[count].trigger_type, trigger_type, sizeof(metadata[count].trigger_type) - 1);
-                metadata[count].trigger_type[sizeof(metadata[count].trigger_type) - 1] = '\0';
+                safe_strcpy(metadata[count].trigger_type, trigger_type, sizeof(metadata[count].trigger_type), 0);
             } else {
-                strncpy(metadata[count].trigger_type, "scheduled", sizeof(metadata[count].trigger_type) - 1);
+                safe_strcpy(metadata[count].trigger_type, "scheduled", sizeof(metadata[count].trigger_type), 0);
             }
 
             metadata[count].protected = sqlite3_column_int(stmt, 12) != 0;
@@ -1512,16 +1474,14 @@ int get_recordings_for_retention(const char *stream_name,
 
         const char *stream = (const char *)sqlite3_column_text(stmt, 1);
         if (stream) {
-            strncpy(recordings[count].stream_name, stream, sizeof(recordings[count].stream_name) - 1);
-            recordings[count].stream_name[sizeof(recordings[count].stream_name) - 1] = '\0';
+            safe_strcpy(recordings[count].stream_name, stream, sizeof(recordings[count].stream_name), 0);
         } else {
             recordings[count].stream_name[0] = '\0';
         }
 
         const char *path = (const char *)sqlite3_column_text(stmt, 2);
         if (path) {
-            strncpy(recordings[count].file_path, path, sizeof(recordings[count].file_path) - 1);
-            recordings[count].file_path[sizeof(recordings[count].file_path) - 1] = '\0';
+            safe_strcpy(recordings[count].file_path, path, sizeof(recordings[count].file_path), 0);
         } else {
             recordings[count].file_path[0] = '\0';
         }
@@ -1541,8 +1501,7 @@ int get_recordings_for_retention(const char *stream_name,
 
         const char *codec = (const char *)sqlite3_column_text(stmt, 9);
         if (codec) {
-            strncpy(recordings[count].codec, codec, sizeof(recordings[count].codec) - 1);
-            recordings[count].codec[sizeof(recordings[count].codec) - 1] = '\0';
+            safe_strcpy(recordings[count].codec, codec, sizeof(recordings[count].codec), 0);
         } else {
             recordings[count].codec[0] = '\0';
         }
@@ -1551,10 +1510,9 @@ int get_recordings_for_retention(const char *stream_name,
 
         const char *trigger_type = (const char *)sqlite3_column_text(stmt, 11);
         if (trigger_type) {
-            strncpy(recordings[count].trigger_type, trigger_type, sizeof(recordings[count].trigger_type) - 1);
-            recordings[count].trigger_type[sizeof(recordings[count].trigger_type) - 1] = '\0';
+            safe_strcpy(recordings[count].trigger_type, trigger_type, sizeof(recordings[count].trigger_type), 0);
         } else {
-            strncpy(recordings[count].trigger_type, "scheduled", sizeof(recordings[count].trigger_type) - 1);
+            safe_strcpy(recordings[count].trigger_type, "scheduled", sizeof(recordings[count].trigger_type), 0);
         }
 
         recordings[count].protected = sqlite3_column_int(stmt, 12) != 0;
@@ -1637,16 +1595,14 @@ int get_recordings_for_quota_enforcement(const char *stream_name,
 
         const char *stream = (const char *)sqlite3_column_text(stmt, 1);
         if (stream) {
-            strncpy(recordings[count].stream_name, stream, sizeof(recordings[count].stream_name) - 1);
-            recordings[count].stream_name[sizeof(recordings[count].stream_name) - 1] = '\0';
+            safe_strcpy(recordings[count].stream_name, stream, sizeof(recordings[count].stream_name), 0);
         } else {
             recordings[count].stream_name[0] = '\0';
         }
 
         const char *path = (const char *)sqlite3_column_text(stmt, 2);
         if (path) {
-            strncpy(recordings[count].file_path, path, sizeof(recordings[count].file_path) - 1);
-            recordings[count].file_path[sizeof(recordings[count].file_path) - 1] = '\0';
+            safe_strcpy(recordings[count].file_path, path, sizeof(recordings[count].file_path), 0);
         } else {
             recordings[count].file_path[0] = '\0';
         }
@@ -1666,8 +1622,7 @@ int get_recordings_for_quota_enforcement(const char *stream_name,
 
         const char *codec = (const char *)sqlite3_column_text(stmt, 9);
         if (codec) {
-            strncpy(recordings[count].codec, codec, sizeof(recordings[count].codec) - 1);
-            recordings[count].codec[sizeof(recordings[count].codec) - 1] = '\0';
+            safe_strcpy(recordings[count].codec, codec, sizeof(recordings[count].codec), 0);
         } else {
             recordings[count].codec[0] = '\0';
         }
@@ -1676,10 +1631,9 @@ int get_recordings_for_quota_enforcement(const char *stream_name,
 
         const char *trigger_type = (const char *)sqlite3_column_text(stmt, 11);
         if (trigger_type) {
-            strncpy(recordings[count].trigger_type, trigger_type, sizeof(recordings[count].trigger_type) - 1);
-            recordings[count].trigger_type[sizeof(recordings[count].trigger_type) - 1] = '\0';
+            safe_strcpy(recordings[count].trigger_type, trigger_type, sizeof(recordings[count].trigger_type), 0);
         } else {
-            strncpy(recordings[count].trigger_type, "scheduled", sizeof(recordings[count].trigger_type) - 1);
+            safe_strcpy(recordings[count].trigger_type, "scheduled", sizeof(recordings[count].trigger_type), 0);
         }
 
         recordings[count].protected = sqlite3_column_int(stmt, 12) != 0;
@@ -1763,14 +1717,12 @@ int get_orphaned_db_entries(recording_metadata_t *recordings, int max_count,
 
             const char *stream = (const char *)sqlite3_column_text(stmt, 1);
             if (stream) {
-                strncpy(recordings[count].stream_name, stream, sizeof(recordings[count].stream_name) - 1);
-                recordings[count].stream_name[sizeof(recordings[count].stream_name) - 1] = '\0';
+                safe_strcpy(recordings[count].stream_name, stream, sizeof(recordings[count].stream_name), 0);
             } else {
                 recordings[count].stream_name[0] = '\0';
             }
 
-            strncpy(recordings[count].file_path, path, sizeof(recordings[count].file_path) - 1);
-            recordings[count].file_path[sizeof(recordings[count].file_path) - 1] = '\0';
+            safe_strcpy(recordings[count].file_path, path, sizeof(recordings[count].file_path), 0);
 
             recordings[count].start_time = (time_t)sqlite3_column_int64(stmt, 3);
 
@@ -1787,8 +1739,7 @@ int get_orphaned_db_entries(recording_metadata_t *recordings, int max_count,
 
             const char *codec = (const char *)sqlite3_column_text(stmt, 9);
             if (codec) {
-                strncpy(recordings[count].codec, codec, sizeof(recordings[count].codec) - 1);
-                recordings[count].codec[sizeof(recordings[count].codec) - 1] = '\0';
+                safe_strcpy(recordings[count].codec, codec, sizeof(recordings[count].codec), 0);
             } else {
                 recordings[count].codec[0] = '\0';
             }
@@ -1797,10 +1748,9 @@ int get_orphaned_db_entries(recording_metadata_t *recordings, int max_count,
 
             const char *trigger_type = (const char *)sqlite3_column_text(stmt, 11);
             if (trigger_type) {
-                strncpy(recordings[count].trigger_type, trigger_type, sizeof(recordings[count].trigger_type) - 1);
-                recordings[count].trigger_type[sizeof(recordings[count].trigger_type) - 1] = '\0';
+                safe_strcpy(recordings[count].trigger_type, trigger_type, sizeof(recordings[count].trigger_type), 0);
             } else {
-                strncpy(recordings[count].trigger_type, "scheduled", sizeof(recordings[count].trigger_type) - 1);
+                safe_strcpy(recordings[count].trigger_type, "scheduled", sizeof(recordings[count].trigger_type), 0);
             }
 
             count++;
@@ -1916,14 +1866,12 @@ int get_recordings_for_tiered_retention(const char *stream_name,
 
         const char *sname = (const char *)sqlite3_column_text(stmt, 1);
         if (sname) {
-            strncpy(recordings[count].stream_name, sname, sizeof(recordings[count].stream_name) - 1);
-            recordings[count].stream_name[sizeof(recordings[count].stream_name) - 1] = '\0';
+            safe_strcpy(recordings[count].stream_name, sname, sizeof(recordings[count].stream_name), 0);
         }
 
         const char *fpath = (const char *)sqlite3_column_text(stmt, 2);
         if (fpath) {
-            strncpy(recordings[count].file_path, fpath, sizeof(recordings[count].file_path) - 1);
-            recordings[count].file_path[sizeof(recordings[count].file_path) - 1] = '\0';
+            safe_strcpy(recordings[count].file_path, fpath, sizeof(recordings[count].file_path), 0);
         }
 
         recordings[count].start_time = (time_t)sqlite3_column_int64(stmt, 3);
@@ -1936,18 +1884,16 @@ int get_recordings_for_tiered_retention(const char *stream_name,
 
         const char *codec = (const char *)sqlite3_column_text(stmt, 9);
         if (codec) {
-            strncpy(recordings[count].codec, codec, sizeof(recordings[count].codec) - 1);
-            recordings[count].codec[sizeof(recordings[count].codec) - 1] = '\0';
+            safe_strcpy(recordings[count].codec, codec, sizeof(recordings[count].codec), 0);
         }
 
         recordings[count].is_complete = sqlite3_column_int(stmt, 10) != 0;
 
         const char *ttype = (const char *)sqlite3_column_text(stmt, 11);
         if (ttype) {
-            strncpy(recordings[count].trigger_type, ttype, sizeof(recordings[count].trigger_type) - 1);
-            recordings[count].trigger_type[sizeof(recordings[count].trigger_type) - 1] = '\0';
+            safe_strcpy(recordings[count].trigger_type, ttype, sizeof(recordings[count].trigger_type), 0);
         } else {
-            strncpy(recordings[count].trigger_type, "scheduled", sizeof(recordings[count].trigger_type) - 1);
+            safe_strcpy(recordings[count].trigger_type, "scheduled", sizeof(recordings[count].trigger_type), 0);
         }
 
         recordings[count].protected = sqlite3_column_int(stmt, 12) != 0;
@@ -2024,14 +1970,12 @@ int get_recordings_for_pressure_cleanup(recording_metadata_t *recordings,
 
         const char *sname = (const char *)sqlite3_column_text(stmt, 1);
         if (sname) {
-            strncpy(recordings[count].stream_name, sname, sizeof(recordings[count].stream_name) - 1);
-            recordings[count].stream_name[sizeof(recordings[count].stream_name) - 1] = '\0';
+            safe_strcpy(recordings[count].stream_name, sname, sizeof(recordings[count].stream_name), 0);
         }
 
         const char *fpath = (const char *)sqlite3_column_text(stmt, 2);
         if (fpath) {
-            strncpy(recordings[count].file_path, fpath, sizeof(recordings[count].file_path) - 1);
-            recordings[count].file_path[sizeof(recordings[count].file_path) - 1] = '\0';
+            safe_strcpy(recordings[count].file_path, fpath, sizeof(recordings[count].file_path), 0);
         }
 
         recordings[count].start_time = (time_t)sqlite3_column_int64(stmt, 3);
@@ -2044,18 +1988,16 @@ int get_recordings_for_pressure_cleanup(recording_metadata_t *recordings,
 
         const char *codec = (const char *)sqlite3_column_text(stmt, 9);
         if (codec) {
-            strncpy(recordings[count].codec, codec, sizeof(recordings[count].codec) - 1);
-            recordings[count].codec[sizeof(recordings[count].codec) - 1] = '\0';
+            safe_strcpy(recordings[count].codec, codec, sizeof(recordings[count].codec), 0);
         }
 
         recordings[count].is_complete = sqlite3_column_int(stmt, 10) != 0;
 
         const char *ttype = (const char *)sqlite3_column_text(stmt, 11);
         if (ttype) {
-            strncpy(recordings[count].trigger_type, ttype, sizeof(recordings[count].trigger_type) - 1);
-            recordings[count].trigger_type[sizeof(recordings[count].trigger_type) - 1] = '\0';
+            safe_strcpy(recordings[count].trigger_type, ttype, sizeof(recordings[count].trigger_type), 0);
         } else {
-            strncpy(recordings[count].trigger_type, "scheduled", sizeof(recordings[count].trigger_type) - 1);
+            safe_strcpy(recordings[count].trigger_type, "scheduled", sizeof(recordings[count].trigger_type), 0);
         }
 
         recordings[count].protected = sqlite3_column_int(stmt, 12) != 0;

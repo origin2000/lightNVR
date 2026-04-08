@@ -2,12 +2,6 @@
  * @file go2rtc_process.c
  * @brief Implementation of the go2rtc process management module
  */
-
-#include "video/go2rtc/go2rtc_process.h"
-#include "video/go2rtc/go2rtc_api.h"
-#include "core/logger.h"
-#include "core/config.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,6 +16,13 @@
 #include <errno.h>
 #include <limits.h>
 #include <curl/curl.h>
+
+#include "video/go2rtc/go2rtc_process.h"
+#include "video/go2rtc/go2rtc_api.h"
+#include "core/logger.h"
+#include "core/config.h"
+#include "utils/strings.h"
+
 
 // Define PATH_MAX if not defined
 #ifndef PATH_MAX
@@ -212,8 +213,7 @@ static bool check_tcp_port_open(int port) {
             char *fields[5] = {NULL};
             char *saveptr = NULL;
             char linecopy[512];
-            strncpy(linecopy, line, sizeof(linecopy) - 1);
-            linecopy[sizeof(linecopy) - 1] = '\0';
+            safe_strcpy(linecopy, line, sizeof(linecopy), 0);
 
             int f = 0;
             char *tok = strtok_r(linecopy, " \t", &saveptr);
@@ -250,8 +250,7 @@ static void find_binary_in_path(const char *name, char *out, size_t out_size) {
     if (!path_env) path_env = "/usr/local/bin:/usr/bin:/bin";
 
     char path_copy[4096];
-    strncpy(path_copy, path_env, sizeof(path_copy) - 1);
-    path_copy[sizeof(path_copy) - 1] = '\0';
+    safe_strcpy(path_copy, path_env, sizeof(path_copy), 0);
 
     char *saveptr = NULL;
     const char *dir = strtok_r(path_copy, ":", &saveptr);
@@ -259,15 +258,13 @@ static void find_binary_in_path(const char *name, char *out, size_t out_size) {
         char candidate[PATH_MAX];
         int n = snprintf(candidate, sizeof(candidate), "%s/%s", dir, name);
         if (n > 0 && n < (int)sizeof(candidate) && access(candidate, X_OK) == 0) {
-            strncpy(out, candidate, out_size - 1);
-            out[out_size - 1] = '\0';
+            safe_strcpy(out, candidate, out_size, 0);
             return;
         }
         dir = strtok_r(NULL, ":", &saveptr);
     }
     // Not found – use bare name and let execvp search PATH at exec time
-    strncpy(out, name, out_size - 1);
-    out[out_size - 1] = '\0';
+    safe_strcpy(out, name, out_size, 0);
 }
 
 /**
@@ -342,8 +339,7 @@ static void recursive_remove_at(int parent_dfd, const char *name) {
  */
 static void recursive_remove(const char *path) {
     char parent[PATH_MAX];
-    strncpy(parent, path, sizeof(parent) - 1);
-    parent[sizeof(parent) - 1] = '\0';
+    safe_strcpy(parent, path, sizeof(parent), 0);
 
     const char *name;
     int parent_fd;
@@ -468,14 +464,12 @@ static bool check_go2rtc_in_path(char *binary_path, size_t buffer_size) {
 
     if (path[0] != '\0' && access(path, X_OK) == 0) {
         log_info("Found go2rtc binary in PATH: %s", path);
-        strncpy(binary_path, path, buffer_size - 1);
-        binary_path[buffer_size - 1] = '\0';
+        safe_strcpy(binary_path, path, buffer_size, 0);
         return true;
     }
 
     // If not found in PATH, just use "go2rtc" and let execl resolve it
-    strncpy(binary_path, "go2rtc", buffer_size - 1);
-    binary_path[buffer_size - 1] = '\0';
+    safe_strcpy(binary_path, "go2rtc", buffer_size, 0);
     log_info("Using 'go2rtc' from PATH");
     return true;
 }
@@ -529,7 +523,7 @@ bool go2rtc_process_init(const char *binary_path, const char *config_dir, int ap
 
         if (binary_path && access(binary_path, X_OK) == 0) {
             // Use the provided binary path
-            strncpy(final_binary_path, binary_path, sizeof(final_binary_path) - 1);
+            safe_strcpy(final_binary_path, binary_path, sizeof(final_binary_path), 0);
             log_info("Using provided go2rtc binary: %s", final_binary_path);
         } else {
             if (binary_path) {
@@ -632,8 +626,7 @@ bool go2rtc_process_generate_config(const char *config_path, int api_port) {
             if (global_config->go2rtc_ice_servers[0] != '\0') {
                 // Parse comma-separated ICE servers
                 char ice_servers_copy[512];
-                strncpy(ice_servers_copy, global_config->go2rtc_ice_servers, sizeof(ice_servers_copy) - 1);
-                ice_servers_copy[sizeof(ice_servers_copy) - 1] = '\0';
+                safe_strcpy(ice_servers_copy, global_config->go2rtc_ice_servers, sizeof(ice_servers_copy), 0);
 
                 char *token = strtok(ice_servers_copy, ",");
                 while (token != NULL) {
@@ -1253,9 +1246,9 @@ bool go2rtc_process_start(int api_port) {
         char log_path[PATH_MAX]; // Use PATH_MAX to accommodate full filesystem paths
 
         // Extract directory from g_config->log_file
-        char log_dir[PATH_MAX] = {0};
         if (g_config.log_file[0] != '\0') {
-            strncpy(log_dir, g_config.log_file, sizeof(log_dir) - 1);
+            char log_dir[PATH_MAX];
+            safe_strcpy(log_dir, g_config.log_file, sizeof(log_dir), 0);
 
             // Find the last slash to get the directory
             char *last_slash = strrchr(log_dir, '/');

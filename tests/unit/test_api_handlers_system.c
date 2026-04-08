@@ -18,6 +18,7 @@
 #include "unity.h"
 #include "core/config.h"
 #include "core/logger.h"
+#include "utils/strings.h"
 #include "database/db_core.h"
 #include "database/db_streams.h"
 #include "web/api_handlers.h"
@@ -28,9 +29,9 @@
 
 extern config_t g_config;
 
-static char g_tmp_root[256];
-static char g_db_path[320];
-static char g_storage_path[320];
+static char g_tmp_root[MAX_PATH_LENGTH];
+static char g_db_path[MAX_PATH_LENGTH];
+static char g_storage_path[MAX_PATH_LENGTH];
 
 static cJSON *parse_response_json(const http_response_t *res) {
     TEST_ASSERT_NOT_NULL(res);
@@ -60,9 +61,9 @@ static void clear_db_streams(void) {
 static stream_config_t make_test_stream(const char *name) {
     stream_config_t s;
     memset(&s, 0, sizeof(s));
-    strncpy(s.name, name, sizeof(s.name) - 1);
-    strncpy(s.url, "rtsp://localhost/stream", sizeof(s.url) - 1);
-    strncpy(s.codec, "h264", sizeof(s.codec) - 1);
+    safe_strcpy(s.name, name, sizeof(s.name), 0);
+    safe_strcpy(s.url, "rtsp://localhost/stream", sizeof(s.url), 0);
+    safe_strcpy(s.codec, "h264", sizeof(s.codec), 0);
     s.enabled  = true;
     s.width    = 1920;
     s.height   = 1080;
@@ -74,7 +75,7 @@ static stream_config_t make_test_stream(const char *name) {
     s.tier_important_multiplier = 2.0;
     s.tier_ephemeral_multiplier = 0.25;
     s.storage_priority = 5;
-    strncpy(s.detection_object_filter, "none", sizeof(s.detection_object_filter) - 1);
+    safe_strcpy(s.detection_object_filter, "none", sizeof(s.detection_object_filter), 0);
     return s;
 }
 
@@ -142,7 +143,7 @@ void test_handle_get_streams_includes_motion_trigger_source(void) {
     clear_db_streams();
 
     stream_config_t ptz = make_test_stream("ptz_cam");
-    strncpy(ptz.motion_trigger_source, "fixed_cam", sizeof(ptz.motion_trigger_source) - 1);
+    safe_strcpy(ptz.motion_trigger_source, "fixed_cam", sizeof(ptz.motion_trigger_source), 0);
     add_stream_config(&ptz);
 
     http_request_t req;
@@ -195,7 +196,7 @@ void test_handle_put_stream_parses_motion_trigger_source(void) {
     http_response_init(&res);
 
     /* Set URL path so handler can extract the stream name */
-    strncpy(req.path, "/api/streams/cam_put_mts", sizeof(req.path) - 1);
+    safe_strcpy(req.path, "/api/streams/cam_put_mts", sizeof(req.path), 0);
 
     /* JSON body with motion_trigger_source to exercise the new parsing code */
     static const char json_body[] = "{\"motion_trigger_source\":\"cam_fixed_src\"}";
@@ -228,7 +229,7 @@ int main(void) {
 
     mkdir(g_tmp_root, 0755);
     mkdir(g_storage_path, 0755);
-    strncpy(g_config.storage_path, g_storage_path, sizeof(g_config.storage_path) - 1);
+    safe_strcpy(g_config.storage_path, g_storage_path, sizeof(g_config.storage_path), 0);
 
     if (init_database(g_db_path) != 0) {
         fprintf(stderr, "FATAL: init_database failed\n");

@@ -23,7 +23,9 @@
 #include "core/logger.h"
 #include "core/daemon.h"
 #include "core/shutdown_coordinator.h"
+#include "core/curl_init.h"
 #include "core/mqtt_client.h"
+#include "utils/strings.h"
 #include "video/stream_manager.h"
 #include "video/stream_state.h"
 #include "video/stream_state_adapter.h"
@@ -42,7 +44,6 @@
 #include "video/onvif_discovery.h"
 #include "video/ffmpeg_leak_detector.h"
 #include "video/onvif_motion_recording.h"
-#include "core/curl_init.h"
 #include "telemetry/stream_metrics.h"
 #include "telemetry/player_telemetry.h"
 
@@ -358,10 +359,9 @@ static int create_pid_file(const char *pid_file) {
     // Make sure the directory exists
     const char *last_slash = strrchr(pid_file, '/');
     if (last_slash) {
-        char dir_path[MAX_PATH_LENGTH] = {0};
+        char dir_path[MAX_PATH_LENGTH];
         size_t dir_len = (size_t)(last_slash - pid_file);
-        strncpy(dir_path, pid_file, dir_len);
-        dir_path[dir_len] = '\0';
+        safe_strcpy(dir_path, pid_file, MAX_PATH_LENGTH, dir_len);
 
         // Create directory if it doesn't exist
         struct stat st;
@@ -549,8 +549,7 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--config") == 0) {
             if (i + 1 < argc) {
                 // Set config file path
-                strncpy(custom_config_path, argv[i+1], MAX_PATH_LENGTH - 1);
-                custom_config_path[MAX_PATH_LENGTH - 1] = '\0';
+                safe_strcpy(custom_config_path, argv[i+1], MAX_PATH_LENGTH, 0);
                 i++;
             } else {
                 log_error("Missing config file path");
@@ -757,7 +756,7 @@ int main(int argc, char *argv[]) {
 
             // Create parent directory for symlink if needed
             char parent_dir[MAX_PATH_LENGTH];
-            strncpy(parent_dir, config.web_root, sizeof(parent_dir) - 1);
+            safe_strcpy(parent_dir, config.web_root, sizeof(parent_dir), 0);
             char *last_slash = strrchr(parent_dir, '/');
             if (last_slash) {
                 *last_slash = '\0';
@@ -772,7 +771,7 @@ int main(int argc, char *argv[]) {
                         config.web_root, storage_web_path, strerror(errno));
 
                 // Fall back to using the storage path directly
-                strncpy(config.web_root, storage_web_path, MAX_PATH_LENGTH - 1);
+                safe_strcpy(config.web_root, storage_web_path, MAX_PATH_LENGTH, 0);
                 log_warn("Using storage path directly for web root: %s", config.web_root);
             } else {
                 log_info("Created symlink from %s to %s", config.web_root, storage_web_path);
@@ -923,13 +922,13 @@ int main(int argc, char *argv[]) {
     };
 
     // Set CORS allowed origins, methods, and headers
-    strncpy(server_config.allowed_origins, "*", sizeof(server_config.allowed_origins) - 1);
-    strncpy(server_config.allowed_methods, "GET, POST, PUT, DELETE, OPTIONS", sizeof(server_config.allowed_methods) - 1);
-    strncpy(server_config.allowed_headers, "Content-Type, Authorization", sizeof(server_config.allowed_headers) - 1);
+    safe_strcpy(server_config.allowed_origins, "*", sizeof(server_config.allowed_origins), 0);
+    safe_strcpy(server_config.allowed_methods, "GET, POST, PUT, DELETE, OPTIONS", sizeof(server_config.allowed_methods), 0);
+    safe_strcpy(server_config.allowed_headers, "Content-Type, Authorization", sizeof(server_config.allowed_headers), 0);
 
     if (config.web_auth_enabled) {
-        strncpy(server_config.username, config.web_username, sizeof(server_config.username) - 1);
-        strncpy(server_config.password, config.web_password, sizeof(server_config.password) - 1);
+        safe_strcpy(server_config.username, config.web_username, sizeof(server_config.username), 0);
+        safe_strcpy(server_config.password, config.web_password, sizeof(server_config.password), 0);
     }
 
     // Initialize HTTP server (libuv + llhttp)
@@ -1017,8 +1016,7 @@ int main(int argc, char *argv[]) {
 
             if (is_api_based) {
                 // For API-based or built-in detection (motion, onvif), use the model string as-is
-                strncpy(model_path, config.streams[i].detection_model, MAX_PATH_LENGTH - 1);
-                model_path[MAX_PATH_LENGTH - 1] = '\0';
+                safe_strcpy(model_path, config.streams[i].detection_model, MAX_PATH_LENGTH, 0);
                 log_info("Using built-in/API detection for stream %s: %s",
                         config.streams[i].name, model_path);
             } else if (config.streams[i].detection_model[0] != '/') {
@@ -1048,8 +1046,7 @@ int main(int argc, char *argv[]) {
                 }
             } else {
                 // Absolute path
-                strncpy(model_path, config.streams[i].detection_model, MAX_PATH_LENGTH - 1);
-                model_path[MAX_PATH_LENGTH - 1] = '\0';
+                safe_strcpy(model_path, config.streams[i].detection_model, MAX_PATH_LENGTH, 0);
 
                 // Check if file exists
                 FILE *model_file = fopen(model_path, "r");

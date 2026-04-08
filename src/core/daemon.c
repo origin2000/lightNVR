@@ -17,11 +17,12 @@
 #include "web/web_server.h"
 #include "core/logger.h"
 #include "core/daemon.h"
+#include "utils/strings.h"
 
 extern volatile bool running; // Reference to the global variable defined in main.c
 
 // Global variable to store PID file path
-static char pid_file_path[256] = "/run/lightnvr.pid";
+static char pid_file_path[MAX_PATH_LENGTH] = "/run/lightnvr.pid";
 
 // Forward declarations
 static void daemon_signal_handler(int sig);
@@ -32,8 +33,7 @@ static int check_running_daemon(const char *pid_file);
 int init_daemon(const char *pid_file) {
     // Store PID file path
     if (pid_file) {
-        strncpy(pid_file_path, pid_file, sizeof(pid_file_path) - 1);
-        pid_file_path[sizeof(pid_file_path) - 1] = '\0';
+        safe_strcpy(pid_file_path, pid_file, sizeof(pid_file_path), 0);
     }
 
     // Check if daemon is already running
@@ -211,9 +211,9 @@ static int write_pid_file(const char *pid_file) {
     // Make sure the directory exists
     const char *last_slash = strrchr(pid_file, '/');
     if (last_slash) {
-        char dir_path[256] = {0};
+        char dir_path[MAX_PATH_LENGTH] = {0};
         size_t dir_len = (size_t)(last_slash - pid_file);
-        strncpy(dir_path, pid_file, dir_len);
+        memcpy(dir_path, pid_file, dir_len);
         dir_path[dir_len] = '\0';
         
         // Create directory if it doesn't exist
@@ -359,14 +359,12 @@ static int check_running_daemon(const char *pid_file) {
 
 // Stop running daemon
 int stop_daemon(const char *pid_file) {
-    char file_path[256];
+    char file_path[MAX_PATH_LENGTH];
 
     if (pid_file) {
-        strncpy(file_path, pid_file, sizeof(file_path) - 1);
-        file_path[sizeof(file_path) - 1] = '\0';
+        safe_strcpy(file_path, pid_file, sizeof(file_path), 0);
     } else {
-        strncpy(file_path, pid_file_path, sizeof(file_path) - 1);
-        file_path[sizeof(file_path) - 1] = '\0';
+        safe_strcpy(file_path, pid_file_path, sizeof(file_path), 0);
     }
 
     // Open and read PID file
@@ -510,14 +508,12 @@ int stop_daemon(const char *pid_file) {
 
 // Get status of daemon
 int daemon_status(const char *pid_file) {
-    char file_path[256];
+    char file_path[MAX_PATH_LENGTH];
 
     if (pid_file) {
-        strncpy(file_path, pid_file, sizeof(file_path) - 1);
-        file_path[sizeof(file_path) - 1] = '\0';
+        safe_strcpy(file_path, pid_file, sizeof(file_path), 0);
     } else {
-        strncpy(file_path, pid_file_path, sizeof(file_path) - 1);
-        file_path[sizeof(file_path) - 1] = '\0';
+        safe_strcpy(file_path, pid_file_path, sizeof(file_path), 0);
     }
 
     // First try to open the file with exclusive locking

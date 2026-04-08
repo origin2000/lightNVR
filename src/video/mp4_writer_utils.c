@@ -33,6 +33,7 @@
 
 #include "core/config.h"
 #include "core/logger.h"
+#include "utils/strings.h"
 #include "video/mp4_writer.h"
 #include "video/mp4_writer_internal.h"
 #include "video/ffmpeg_utils.h"
@@ -295,8 +296,7 @@ static int init_audio_transcoder(const char *stream_name,
     audio_transcoders[slot].initialized = 1;
 
     // Store stream name
-    strncpy(audio_transcoder_stream_names[slot], stream_name, MAX_STREAM_NAME - 1);
-    audio_transcoder_stream_names[slot][MAX_STREAM_NAME - 1] = '\0';
+    safe_strcpy(audio_transcoder_stream_names[slot], stream_name, MAX_STREAM_NAME, 0);
 
     log_info("Successfully initialized audio transcoder from PCM to AAC for %s", stream_name);
 
@@ -995,8 +995,7 @@ int mp4_writer_initialize(mp4_writer_t *writer, const AVPacket *pkt, const AVStr
     const char *last_slash = strrchr(writer->output_path, '/');
     if (last_slash) {
         size_t dir_len = last_slash - writer->output_path;
-        strncpy(dir_path, writer->output_path, dir_len);
-        dir_path[dir_len] = '\0';
+        safe_strcpy(dir_path, writer->output_path, PATH_MAX, dir_len);
 
         // Log the directory we're working with
         log_info("Ensuring MP4 output directory exists: %s", dir_path);
