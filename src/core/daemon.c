@@ -17,6 +17,7 @@
 #include "web/web_server.h"
 #include "core/logger.h"
 #include "core/daemon.h"
+#include "core/path_utils.h"
 #include "utils/strings.h"
 
 extern volatile bool running; // Reference to the global variable defined in main.c
@@ -196,24 +197,11 @@ static void daemon_signal_handler(int sig) {
 // Write PID file
 int write_pid_file(const char *pid_file) {
     // Make sure the directory exists
-    const char *last_slash = strrchr(pid_file, '/');
-    if (last_slash) {
-        char dir_path[MAX_PATH_LENGTH] = {0};
-        size_t dir_len = (size_t)(last_slash - pid_file);
-        memcpy(dir_path, pid_file, dir_len);
-        dir_path[dir_len] = '\0';
-        
-        // Create directory if it doesn't exist
-        struct stat st;
-        if (stat(dir_path, &st) != 0) {
-            if (mkdir(dir_path, 0755) != 0 && errno != EEXIST) {
-                log_error("Could not create directory for PID file: %s", strerror(errno));
-                return -1;
-            }
-        }
+    if (ensure_path(pid_file) != 0) {
+        return -1;
     }
     
-    // Open the file with exclusive locking
+    // Open the file initially without exclusive locking
     int fd = open(pid_file, O_RDWR | O_CREAT, 0644);
     if (fd < 0) {
         log_error("Failed to open PID file %s: %s", pid_file, strerror(errno));

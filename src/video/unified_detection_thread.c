@@ -507,7 +507,7 @@ int start_unified_detection_thread(const char *stream_name, const char *model_pa
 
         snprintf(ctx->output_dir, sizeof(ctx->output_dir), "%s/%s",
                  global_cfg->storage_path, stream_path);
-        mkdir(ctx->output_dir, 0755);
+        ensure_dir(ctx->output_dir);
     }
 
     // If using built-in motion detection, enable the motion stream now so that
@@ -1543,7 +1543,7 @@ static int udt_start_recording(unified_detection_ctx_t *ctx) {
     // Ensure output directory exists
     struct stat st = {0};
     if (stat(ctx->output_dir, &st) == -1) {
-        if (mkdir(ctx->output_dir, 0755) != 0) {
+        if (ensure_dir(ctx->output_dir)) {
             log_error("[%s] Failed to create output directory: %s", ctx->stream_name, ctx->output_dir);
             return -1;
         }

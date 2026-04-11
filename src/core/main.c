@@ -25,6 +25,7 @@
 #include "core/shutdown_coordinator.h"
 #include "core/curl_init.h"
 #include "core/mqtt_client.h"
+#include "core/path_utils.h"
 #include "utils/strings.h"
 #include "video/stream_manager.h"
 #include "video/stream_state.h"
@@ -671,20 +672,14 @@ int main(int argc, char *argv[]) {
                     config.web_root, storage_web_path);
 
             // Create the directory in our storage path
-            if (mkdir(storage_web_path, 0755) != 0 && errno != EEXIST) {
+            if (mkdir_recursive(storage_web_path)) {
                 log_error("Failed to create web root in storage path: %s", strerror(errno));
                 return EXIT_FAILURE;
             }
 
             // Create parent directory for symlink if needed
-            char parent_dir[MAX_PATH_LENGTH];
-            safe_strcpy(parent_dir, config.web_root, sizeof(parent_dir), 0);
-            char *last_slash = strrchr(parent_dir, '/');
-            if (last_slash) {
-                *last_slash = '\0';
-                if (mkdir(parent_dir, 0755) != 0 && errno != EEXIST) {
-                    log_warn("Failed to create parent directory for web root symlink: %s", strerror(errno));
-                }
+            if (ensure_path(config.web_root)) {
+                log_warn("Failed to create parent directory for web root symlink");
             }
 
             // Create the symlink
@@ -700,8 +695,8 @@ int main(int argc, char *argv[]) {
             }
         } else {
             // Try to create it directly
-            if (mkdir(config.web_root, 0755) != 0) {
-                log_error("Failed to create web root directory: %s", strerror(errno));
+            if (mkdir_recursive(config.web_root)) {
+                log_error("Failed to create web root directory");
                 return EXIT_FAILURE;
             }
 
@@ -960,7 +955,7 @@ int main(int argc, char *argv[]) {
                     log_error("Detection will not work properly!");
 
                     // Create the models directory if it doesn't exist
-                    if (mkdir(config.models_path, 0755) != 0 && errno != EEXIST) {
+                    if (mkdir_recursive(config.models_path)) {
                         log_error("Failed to create models directory: %s", strerror(errno));
                     } else {
                         log_info("Created models directory: %s", config.models_path);

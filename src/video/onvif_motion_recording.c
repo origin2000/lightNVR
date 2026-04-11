@@ -276,17 +276,10 @@ static int generate_recording_path(const char *stream_name, char *path, size_t p
              config->storage_path, sanitized_name, year, month, day);
 
     // Create directories if they don't exist
-    char temp_path[MAX_PATH_LENGTH];
-    snprintf(temp_path, sizeof(temp_path), "%s/%s", config->storage_path, sanitized_name);
-    mkdir(temp_path, 0755);
-
-    snprintf(temp_path, sizeof(temp_path), "%s/%s/%s", config->storage_path, sanitized_name, year);
-    mkdir(temp_path, 0755);
-
-    snprintf(temp_path, sizeof(temp_path), "%s/%s/%s/%s", config->storage_path, sanitized_name, year, month);
-    mkdir(temp_path, 0755);
-
-    mkdir(dir_path, 0755);
+    if (mkdir_recursive(dir_path)) {
+        log_error("Could not create recording directory: %s", dir_path);
+        return -1;
+    }
 
     // Generate full file path
     snprintf(path, path_size, "%s/%s_%s_motion.mp4", dir_path, sanitized_name, timestamp);

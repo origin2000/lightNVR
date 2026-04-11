@@ -18,6 +18,7 @@
 #include "unity.h"
 #include "core/config.h"
 #include "core/logger.h"
+#include "core/path_utils.h"
 #include "utils/strings.h"
 #include "database/db_core.h"
 #include "database/db_streams.h"
@@ -227,8 +228,7 @@ int main(void) {
     snprintf(g_db_path, sizeof(g_db_path), "%s/lightnvr.db", g_tmp_root);
     snprintf(g_storage_path, sizeof(g_storage_path), "%s/storage", g_tmp_root);
 
-    mkdir(g_tmp_root, 0755);
-    mkdir(g_storage_path, 0755);
+    mkdir_recursive(g_storage_path);
     safe_strcpy(g_config.storage_path, g_storage_path, sizeof(g_config.storage_path), 0);
 
     if (init_database(g_db_path) != 0) {

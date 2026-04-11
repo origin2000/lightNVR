@@ -38,6 +38,7 @@
 #define LOG_COMPONENT "SystemAPI"
 #include "core/logger.h"
 #include "core/config.h"
+#include "core/path_utils.h"
 #include "core/version.h"
 #include "core/shutdown_coordinator.h"
 #include "utils/strings.h"
@@ -1441,7 +1442,7 @@ void handle_post_system_backup(const http_request_t *req, http_response_t *res) 
     snprintf(backup_path, sizeof(backup_path), "%s/backups", g_config.web_root);
 
     // Create backups directory if it doesn't exist
-    mkdir(backup_path, 0755);
+    ensure_dir(backup_path);
 
     // Append filename to path
     snprintf(backup_path, sizeof(backup_path), "%s/backups/%s", g_config.web_root, backup_filename);

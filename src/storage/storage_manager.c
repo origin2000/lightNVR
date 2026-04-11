@@ -124,14 +124,8 @@ int init_storage_manager(const char *storage_path, uint64_t max_size) {
     storage_manager.max_size = max_size;
 
     // Create storage directory if it doesn't exist
-    struct stat st;
-    if (stat(storage_path, &st) != 0) {
-        if (mkdir(storage_path, 0755) != 0) {
-            log_error("Failed to create storage directory: %s", strerror(errno));
-            return -1;
-        }
-    } else if (!S_ISDIR(st.st_mode)) {
-        log_error("Storage path is not a directory: %s", storage_path);
+    if (mkdir_recursive(storage_path)) {
+        log_error("Failed to create storage directory: %s", strerror(errno));
         return -1;
     }
 
@@ -593,14 +587,8 @@ int create_stream_directory(const char *stream_name) {
     char dir_path[MAX_PATH_LENGTH];
     snprintf(dir_path, sizeof(dir_path), "%s/%s", storage_manager.storage_path, encoded_name);
 
-    struct stat st;
-    if (stat(dir_path, &st) != 0) {
-        if (mkdir(dir_path, 0755) != 0) {
-            log_error("Failed to create stream directory: %s", strerror(errno));
-            return -1;
-        }
-    } else if (!S_ISDIR(st.st_mode)) {
-        log_error("Stream path is not a directory: %s", dir_path);
+    if (ensure_dir(dir_path)) {
+        log_error("Failed to create stream directory");
         return -1;
     }
 

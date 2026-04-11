@@ -26,6 +26,7 @@
 #include "database/db_backup.h"
 #include "core/config.h"
 #include "core/logger.h"
+#include "core/path_utils.h"
 #include "utils/strings.h"
 
 // Database handle
@@ -47,8 +48,6 @@ static time_t last_backup_time = 0;
 static bool wal_mode_enabled = false;
 
 // No longer tracking prepared statements - each function is responsible for finalizing its own statements
-
-static int create_directory(const char *path);
 
 static int sync_path_if_exists(const char *path) {
     int fd = open(path, O_RDONLY);
@@ -145,7 +144,7 @@ static int get_backup_directory(char *backup_dir, size_t backup_dir_size) {
         return -1;
     }
 
-    if (create_directory(backup_dir) != 0) {
+    if (mkdir_recursive(backup_dir) != 0) {
         log_error("Failed to create backup directory: %s", backup_dir);
         return -1;
     }
@@ -442,48 +441,6 @@ static int perform_database_backup_cycle(const char *reason, bool run_post_backu
     return 0;
 }
 
-// Create directory if it doesn't exist
-static int create_directory(const char *path) {
-    struct stat st;
-
-    // Check if directory already exists
-    if (stat(path, &st) == 0) {
-        if (S_ISDIR(st.st_mode)) {
-            return 0; // Directory exists
-        } else {
-            return -1; // Path exists but is not a directory
-        }
-    }
-
-    // Create directory with permissions 0755
-    if (mkdir(path, 0755) != 0) {
-        if (errno == ENOENT) {
-            // Parent directory doesn't exist, try to create it recursively
-            char *parent_path = strdup(path);
-            if (!parent_path) {
-                return -1;
-            }
-
-            const char *parent_dir = dirname(parent_path);
-            int ret = create_directory(parent_dir);
-            free(parent_path);
-
-            if (ret != 0) {
-                return -1;
-            }
-
-            // Try again to create the directory
-            if (mkdir(path, 0755) != 0) {
-                return -1;
-            }
-        } else {
-            return -1;
-        }
-    }
-
-    return 0;
-}
-
 // Function to checkpoint the database WAL file
 int checkpoint_database(void) {
     int rc = SQLITE_OK;
@@ -690,7 +647,7 @@ int init_database(const char *db_path) {
     char *dir = dirname(dir_path);
 
     log_info("Creating database directory if needed: %s", dir);
-    if (create_directory(dir) != 0) {
+    if (mkdir_recursive(dir) != 0) {
         log_error("Failed to create database directory: %s", dir);
         free(dir_path);
         return -1;

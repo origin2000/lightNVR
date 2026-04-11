@@ -2448,7 +2448,7 @@ int start_hls_unified_stream(const char *stream_name) {
         for (char *p = temp_path + 1; *p; p++) {
             if (*p == '/') {
                 *p = '\0';
-                if (mkdir(temp_path, 0777) != 0 && errno != EEXIST) {
+                if (ensure_dir(temp_path)) {
                     log_warn("Failed to create parent directory: %s (error: %s)", temp_path, strerror(errno));
                 }
                 *p = '/';
@@ -2456,7 +2456,7 @@ int start_hls_unified_stream(const char *stream_name) {
         }
 
         // Create the final directory
-        if (mkdir(temp_path, 0777) != 0 && errno != EEXIST) {
+        if (ensure_dir(temp_path)) {
             log_error("Failed to create output directory: %s (error: %s)", temp_path, strerror(errno));
             hls_guarded_free(ctx);
             return -1;
@@ -2481,7 +2481,7 @@ int start_hls_unified_stream(const char *stream_name) {
 
     // Create parent directory if it doesn't exist
     if (stat(parent_dir, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        if (mkdir(parent_dir, 0777) != 0 && errno != EEXIST) {
+        if (ensure_dir(parent_dir)) {
             log_warn("Failed to create parent HLS directory: %s (error: %s)", parent_dir, strerror(errno));
         }
     }

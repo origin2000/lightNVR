@@ -21,6 +21,7 @@
 #include "video/go2rtc/go2rtc_api.h"
 #include "core/logger.h"
 #include "core/config.h"
+#include "core/path_utils.h"
 #include "utils/strings.h"
 
 
@@ -484,12 +485,9 @@ bool go2rtc_process_init(const char *binary_path, const char *config_dir, int ap
     }
 
     // Check if config directory exists, create if not
-    struct stat st = {0};
-    if (stat(config_dir, &st) == -1) {
-        if (mkdir(config_dir, 0755) == -1) {
-            log_error("Failed to create go2rtc config directory: %s", config_dir);
-            return false;
-        }
+    if (mkdir_recursive(config_dir)) {
+        log_error("Failed to create go2rtc config directory: %s", config_dir);
+        return false;
     }
 
     // Store config directory
