@@ -2417,78 +2417,10 @@ int start_hls_unified_stream(const char *stream_name) {
     }
 
     // Create output paths
-    const config_t *global_config = get_streaming_config();
-
-    // Use storage_path_hls if specified, otherwise fall back to storage_path
-    const char *base_storage_path = global_config->storage_path;
-    if (global_config->storage_path_hls[0] != '\0') {
-        base_storage_path = global_config->storage_path_hls;
-        log_info("Using dedicated HLS storage path: %s", base_storage_path);
-    } else {
-        log_info("Using default storage path for HLS: %s", base_storage_path);
-    }
-
-    // Make sure we're using a valid path.
-    char stream_path[MAX_STREAM_NAME];
-    sanitize_stream_name(stream_name, stream_path, MAX_STREAM_NAME);
-
-    // Create HLS output path
-    snprintf(ctx->output_path, MAX_PATH_LENGTH, "%s/hls/%s",
-             base_storage_path, stream_path);
-
-    // Create HLS directory if it doesn't exist using direct C functions to handle paths with spaces
-    struct stat st;
-    if (stat(ctx->output_path, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        log_info("Creating HLS directory: %s", ctx->output_path);
-
-        // Create parent directories one by one
-        char temp_path[MAX_PATH_LENGTH];
-        safe_strcpy(temp_path, ctx->output_path, MAX_PATH_LENGTH, 0);
-
-        for (char *p = temp_path + 1; *p; p++) {
-            if (*p == '/') {
-                *p = '\0';
-                if (ensure_dir(temp_path)) {
-                    log_warn("Failed to create parent directory: %s (error: %s)", temp_path, strerror(errno));
-                }
-                *p = '/';
-            }
-        }
-
-        // Create the final directory
-        if (ensure_dir(temp_path)) {
-            log_error("Failed to create output directory: %s (error: %s)", temp_path, strerror(errno));
-            hls_guarded_free(ctx);
-            return -1;
-        }
-
-        // Verify the directory was created
-        if (stat(ctx->output_path, &st) != 0 || !S_ISDIR(st.st_mode)) {
-            log_error("Failed to verify output directory: %s", ctx->output_path);
-            hls_guarded_free(ctx);
-            return -1;
-        }
-    }
-
-    // Set directory permissions to ensure FFmpeg can write files
-    if (chmod(ctx->output_path, 0755) != 0) {
-        log_warn("Failed to set permissions on HLS directory: %s (error: %s)", ctx->output_path, strerror(errno));
-    }
-
-    // Also ensure the parent directory of the HLS directory exists and is writable
-    char parent_dir[MAX_PATH_LENGTH];
-    snprintf(parent_dir, sizeof(parent_dir), "%s/hls", global_config->storage_path);
-
-    // Create parent directory if it doesn't exist
-    if (stat(parent_dir, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        if (ensure_dir(parent_dir)) {
-            log_warn("Failed to create parent HLS directory: %s (error: %s)", parent_dir, strerror(errno));
-        }
-    }
-
-    // Set permissions on parent directory
-    if (chmod(parent_dir, 0755) != 0) {
-        log_warn("Failed to set permissions on parent HLS directory: %s (error: %s)", parent_dir, strerror(errno));
+    if (ensure_hls_directory(ctx->output_path, MAX_PATH_LENGTH, stream_name)) {
+        log_error("Failed to create output directory %s", ctx->output_path);
+        hls_guarded_free(ctx);
+        return -1;
     }
 
     log_info("Created HLS directory with full permissions: %s", ctx->output_path);
@@ -2573,29 +2505,7 @@ int restart_hls_unified_stream(const char *stream_name) {
     // Wait a bit to ensure resources are released
     usleep(500000); // 500ms
 
-    // Verify that the HLS directory exists and is writable
-    const config_t *global_config = get_streaming_config();
-    if (global_config) {
-        // Use storage_path_hls if specified, otherwise fall back to storage_path
-        const char *base_storage_path = global_config->storage_path;
-        if (global_config->storage_path_hls[0] != '\0') {
-            base_storage_path = global_config->storage_path_hls;
-            log_info("Using dedicated HLS storage path for restart: %s", base_storage_path);
-        }
-
-        // Make sure we're using a valid path.
-        char stream_path[MAX_STREAM_NAME];
-        sanitize_stream_name(stream_name, stream_path, MAX_STREAM_NAME);
-
-        char hls_dir[MAX_PATH_LENGTH];
-        snprintf(hls_dir, MAX_PATH_LENGTH, "%s/hls/%s",
-                base_storage_path, stream_path);
-
-        // Ensure the directory exists and has proper permissions
-        log_info("Ensuring HLS directory exists and is writable: %s", hls_dir);
-        ensure_hls_directory(hls_dir, stream_name);
-    }
-
+    // Verify that the HLS directory will be created and permissions set in start_hls_stream
     // Start the stream again
     int start_result = start_hls_stream(stream_name);
     if (start_result != 0) {

@@ -21,6 +21,7 @@
 #include "core/logger.h"
 #include "core/path_utils.h"
 #include "utils/strings.h"
+#include "video/hls/hls_directory.h"
 #include "video/hls_writer.h"
 #include "video/detection_integration.h"
 #include "video/detection_frame_processing.h"
@@ -32,7 +33,6 @@ extern int is_detection_stream_reader_running(const char *stream_name);
 extern int get_detection_interval(const char *stream_name);
 
 // Forward declarations for internal functions
-static int ensure_output_directory(hls_writer_t *writer);
 static void register_hls_writer(hls_writer_t *writer);
 static void unregister_hls_writer(hls_writer_t *writer);
 
@@ -187,7 +187,7 @@ hls_writer_t *hls_writer_create(const char *output_dir, const char *stream_name,
 
     // Ensure the output directory exists and is writable
     // This will also update the writer's output_dir field with the safe path if needed
-    if (ensure_output_directory(writer) != 0) {
+    if (ensure_hls_directory(writer->output_dir, MAX_PATH_LENGTH, writer->stream_name)) {
         log_error("Failed to ensure HLS output directory exists: %s", writer->output_dir);
         pthread_mutex_destroy(&writer->mutex);
         free(writer);
@@ -370,64 +370,6 @@ int hls_writer_initialize(hls_writer_t *writer, const AVStream *input_stream) {
 }
 
 /**
- * Ensure the output directory exists and is writable
- * Updates the writer's output_dir field with the safe path
- */
-static int ensure_output_directory(hls_writer_t *writer) {
-    struct stat st;
-    const config_t *global_config = get_streaming_config();
-
-    // Check if writer or global_config is NULL to prevent null pointer dereference
-    if (!writer || !global_config) {
-        log_error("Failed to get streaming config for HLS directory or writer is NULL");
-        return -1;
-    }
-
-    char safe_dir_path[MAX_PATH_LENGTH];
-    const char *dir_path = writer->output_dir;
-
-    //  Always use the consistent path structure for HLS
-    // Extract stream name from the path (last component). Note that this path is
-    // already sanitized for use as a directory path.
-    const char *last_slash = strrchr(dir_path, '/');
-    const char *stream_name = last_slash ? last_slash + 1 : dir_path;
-
-    // Use storage_path_hls if specified, otherwise fall back to storage_path
-    const char *base_storage_path = global_config->storage_path;
-    if (global_config->storage_path_hls[0] != '\0') {
-        base_storage_path = global_config->storage_path_hls;
-        log_info("Using dedicated HLS storage path in writer: %s", base_storage_path);
-    }
-
-    // Create a path within our storage directory
-    snprintf(safe_dir_path, sizeof(safe_dir_path), "%s/hls/%s",
-            base_storage_path, stream_name);
-
-    // Log if we're redirecting from a different path
-    if (strcmp(dir_path, safe_dir_path) != 0) {
-        log_warn("Redirecting HLS directory from %s to %s to ensure consistent path structure",
-                dir_path, safe_dir_path);
-
-        // Update the writer's output_dir field with the safe path
-        safe_strcpy(writer->output_dir, safe_dir_path, MAX_PATH_LENGTH, 0);
-    }
-
-    // Create directory if necessary
-    if (mkdir_recursive(safe_dir_path)) {
-        log_error("Failed to create HLS output directory %s: %s", safe_dir_path, strerror(errno));
-        return -1;
-    }
-
-    // Ensure the directory is writable
-    if (chmod_path(safe_dir_path, 0755)) {
-        // Not fatal
-        log_warn("Failed to set permissions on directory: %s", safe_dir_path);
-    }
-
-    return 0;
-}
-
-/**
  * Write packet to HLS stream with per-stream timestamp handling and proper bitstream filtering
  */
 int hls_writer_write_packet(hls_writer_t *writer, const AVPacket *pkt, const AVStream *input_stream) {
@@ -457,7 +399,7 @@ int hls_writer_write_packet(hls_writer_t *writer, const AVPacket *pkt, const AVS
     // Use thread-safe approach with per-writer timestamp instead of static variable
     time_t now = time(NULL);
     if (now - writer->last_cleanup_time >= 10) {
-        if (ensure_output_directory(writer) != 0) {
+        if (ensure_hls_directory(writer->output_dir, MAX_PATH_LENGTH, writer->stream_name)) {
             log_error("Failed to ensure HLS output directory exists: %s", writer->output_dir);
             return -1;
         }
@@ -676,7 +618,7 @@ int hls_writer_write_packet(hls_writer_t *writer, const AVPacket *pkt, const AVS
 
         // Try to fix directory issues
         if (strstr(error_buf, "No such file or directory") != NULL) {
-            ensure_output_directory(writer);
+            ensure_hls_directory(writer->output_dir, MAX_PATH_LENGTH, writer->stream_name);
         } else if (strstr(error_buf, "Invalid data found when processing input") != NULL) {
             // For invalid data errors, return 0 to continue processing
             // go2rtc handles stream normalization, so occasional bad packets can be skipped

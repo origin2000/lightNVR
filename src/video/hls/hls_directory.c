@@ -19,7 +19,11 @@
 /**
  * Ensure the HLS output directory exists and is writable
  */
-int ensure_hls_directory(const char *output_dir, const char *stream_name) {
+int ensure_hls_directory(char *output_dir, size_t output_dir_size, const char *stream_name) {
+    if (output_dir == NULL || output_dir_size == 0 || stream_name == NULL) {
+        return -1;
+    }
+
     // Get the global config for storage path
     const config_t *global_config = get_streaming_config();
     if (!global_config) {
@@ -29,7 +33,6 @@ int ensure_hls_directory(const char *output_dir, const char *stream_name) {
 
     //  Always use the consistent path structure for HLS
     // Use storage_path_hls if specified, otherwise fall back to storage_path
-    char safe_output_dir[MAX_PATH_LENGTH];
     const char *base_storage_path = global_config->storage_path;
 
     // Check if storage_path_hls is specified and not empty
@@ -42,153 +45,18 @@ int ensure_hls_directory(const char *output_dir, const char *stream_name) {
     char stream_path[MAX_STREAM_NAME];
     sanitize_stream_name(stream_name, stream_path, MAX_STREAM_NAME);
 
-    snprintf(safe_output_dir, sizeof(safe_output_dir), "%s/hls/%s",
+    snprintf(output_dir, output_dir_size, "%s/hls/%s",
             base_storage_path, stream_path);
 
-    // Log if we're redirecting from a different path
-    if (strcmp(output_dir, safe_output_dir) != 0) {
-        log_warn("Redirecting HLS output from %s to %s to ensure consistent path structure",
-                output_dir, safe_output_dir);
-    }
-
-    // Always use the safe path
-    output_dir = safe_output_dir;
-
     // Verify output directory exists and is writable
-    struct stat st;
-    if (stat(output_dir, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        log_warn("Output directory does not exist or is not a directory: %s", output_dir);
-
-        // Recreate it using direct C functions to handle paths with spaces
-        char temp_path[MAX_PATH_LENGTH];
-        safe_strcpy(temp_path, output_dir, MAX_PATH_LENGTH, 0);
-
-        // Create parent directories one by one
-        for (char *p = temp_path + 1; *p; p++) {
-            if (*p == '/') {
-                *p = '\0';
-                if (ensure_dir(temp_path)) {
-                    log_warn("Failed to create parent directory: %s (error: %s)", temp_path, strerror(errno));
-                }
-                *p = '/';
-            }
-        }
-
-        // Create the final directory
-        if (ensure_dir(temp_path)) {
-            log_error("Failed to create output directory: %s (error: %s)", temp_path, strerror(errno));
-            return -1;
-        }
-
-        // Verify the directory was created and set permissions via fd to avoid TOCTOU
-        int dir_fd = open(output_dir, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
-        if (dir_fd < 0 || fstat(dir_fd, &st) != 0 || !S_ISDIR(st.st_mode)) {
-            log_error("Failed to verify output directory: %s", output_dir);
-            if (dir_fd >= 0) close(dir_fd);
-            return -1;
-        }
-
-        // Use fchmod on the open fd to avoid TOCTOU race between stat and chmod (#32)
-        if (fchmod(dir_fd, 0755) != 0) {
-            log_warn("Failed to set permissions on directory: %s (error: %s)", output_dir, strerror(errno));
-        }
-        close(dir_fd);
-
-        log_info("Successfully created output directory: %s", output_dir);
+    if (mkdir_recursive(output_dir)) {
+        log_error("Failed to create output directory: %s", output_dir);
+        return -1;
     }
 
-    // Ensure the directory is writable. Use open()+fstatat()+fchmod() exclusively
-    // so that there is no TOCTOU race between an access() check and the open().
-    {
-        int dir_fd = open(output_dir, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
-        if (dir_fd < 0) {
-            log_error("Failed to open output directory: %s (error: %s)", output_dir, strerror(errno));
-            return -1;
-        }
-
-        struct stat dir_st;
-        if (fstat(dir_fd, &dir_st) != 0) {
-            log_error("Failed to stat output directory fd: %s (error: %s)", output_dir, strerror(errno));
-            close(dir_fd);
-            return -1;
-        }
-
-        // If the owner-write bit is missing, try to add full permissions via fd
-        if (!(dir_st.st_mode & S_IWUSR)) {
-            log_warn("Output directory may not be writable: %s, attempting permission fix", output_dir);
-            if (fchmod(dir_fd, 0755) != 0) {
-                log_warn("Failed to set permissions on directory: %s (error: %s)", output_dir, strerror(errno));
-            }
-        }
-
-        close(dir_fd);
-    }
-
-    // Create a parent directory check file to ensure the parent directory exists
-    const char *last_slash = strrchr(output_dir, '/');
-    if (last_slash) {
-        char parent_dir[MAX_PATH_LENGTH];
-        size_t parent_len = last_slash - output_dir;
-        safe_strcpy(parent_dir, output_dir, MAX_PATH_LENGTH, parent_len);
-        parent_dir[parent_len] = '\0';
-
-        // Create parent directory using direct C functions
-        char temp_path[MAX_PATH_LENGTH];
-        safe_strcpy(temp_path, parent_dir, MAX_PATH_LENGTH, 0);
-
-        // Create parent directories one by one
-        for (char *p = temp_path + 1; *p; p++) {
-            if (*p == '/') {
-                *p = '\0';
-                if (ensure_dir(temp_path)) {
-                    log_warn("Failed to create parent directory: %s (error: %s)", temp_path, strerror(errno));
-                }
-                *p = '/';
-            }
-        }
-
-        // Create the final directory
-        if (ensure_dir(temp_path)) {
-            log_warn("Failed to create parent directory: %s (error: %s)", temp_path, strerror(errno));
-        }
-
-        // Create a test file in the parent directory (with restricted permissions 0644)
-        char test_file[MAX_PATH_LENGTH];
-        snprintf(test_file, sizeof(test_file), "%s/.hls_parent_check", parent_dir);
-        int test_fd = open(test_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        if (test_fd >= 0) {
-            close(test_fd);
-            // Leave the file there as a marker
-            log_info("Verified parent directory is writable: %s", parent_dir);
-        } else {
-            log_warn("Parent directory may not be writable: %s (error: %s)",
-                    parent_dir, strerror(errno));
-
-            // Try to create parent directory with full permissions using direct C functions
-            char retry_path[MAX_PATH_LENGTH];
-            safe_strcpy(retry_path, parent_dir, MAX_PATH_LENGTH, 0);
-
-            // Create parent directories one by one
-            for (char *p = retry_path + 1; *p; p++) {
-                if (*p == '/') {
-                    *p = '\0';
-                    if (ensure_dir(retry_path)) {
-                        log_warn("Failed to create parent directory: %s (error: %s)", retry_path, strerror(errno));
-                    } else {
-                        // Set permissions (owner rwx, group/other rx)
-                        chmod(retry_path, 0755);
-                    }
-                    *p = '/';
-                }
-            }
-
-            // Create the final directory
-            if (ensure_dir(retry_path)) {
-                log_warn("Failed to create parent directory: %s (error: %s)", retry_path, strerror(errno));
-            }
-
-            log_info("Attempted to recreate parent directory with full permissions: %s", parent_dir);
-        }
+    // Ensure the directory is writable.
+    if (chmod_path(output_dir, 0755) != 0) {
+        log_warn("Failed to set permissions on output directory: %s", output_dir);
     }
 
     return 0;
@@ -234,6 +102,8 @@ int clear_stream_hls_segments(const char *stream_name) {
 
     log_info("Clearing HLS segments for stream: %s in directory: %s", stream_name, stream_hls_dir);
 
+    const char *to_remove[] = {".ts", ".m4s", ".m3u8"};
+
     // Remove all .ts segment files using direct C functions
     DIR *dir = opendir(stream_hls_dir);
     if (dir) {
@@ -241,54 +111,35 @@ int clear_stream_hls_segments(const char *stream_name) {
         int removed_count = 0;
 
         while ((entry = readdir(dir)) != NULL) {
-            // Check if this is a .ts file
-            if (strstr(entry->d_name, ".ts") != NULL) {
+            bool match = false;
+            // Check if any extension matches
+            for (int i = 0; i < sizeof(to_remove)/sizeof(char *); i++) {
+                if (ends_with(entry->d_name, to_remove[i])) {
+                    match = true;
+                    break;
+                }
+            }
+
+            if (match) {
                 char file_path[MAX_PATH_LENGTH];
                 snprintf(file_path, sizeof(file_path), "%s/%s", stream_hls_dir, entry->d_name);
 
                 if (unlink(file_path) == 0) {
                     removed_count++;
                 } else {
-                    log_warn("Failed to remove HLS .ts file: %s (error: %s)",
+                    log_warn("Failed to remove HLS file: %s (error: %s)",
                             file_path, strerror(errno));
                 }
             }
         }
 
         closedir(dir);
-        log_info("Removed %d HLS .ts segment files in %s", removed_count, stream_hls_dir);
+        log_info("Removed %d HLS files in %s", removed_count, stream_hls_dir);
     } else {
-        log_warn("Failed to open directory to remove .ts files: %s (error: %s)",
+        log_warn("Failed to open directory to remove HLS files: %s (error: %s)",
                 stream_hls_dir, strerror(errno));
     }
 
-    // Remove all .m4s segment files (for fMP4) using direct C functions
-    dir = opendir(stream_hls_dir);
-    if (dir) {
-        const struct dirent *entry;
-        int removed_count = 0;
-
-        while ((entry = readdir(dir)) != NULL) {
-            // Check if this is a .m4s file
-            if (strstr(entry->d_name, ".m4s") != NULL) {
-                char file_path[MAX_PATH_LENGTH];
-                snprintf(file_path, sizeof(file_path), "%s/%s", stream_hls_dir, entry->d_name);
-
-                if (unlink(file_path) == 0) {
-                    removed_count++;
-                } else {
-                    log_warn("Failed to remove HLS .m4s file: %s (error: %s)",
-                            file_path, strerror(errno));
-                }
-            }
-        }
-
-        closedir(dir);
-        log_info("Removed %d HLS .m4s segment files in %s", removed_count, stream_hls_dir);
-    } else {
-        log_warn("Failed to open directory to remove .m4s files: %s (error: %s)",
-                stream_hls_dir, strerror(errno));
-    }
 
     // Remove init.mp4 file (for fMP4) using direct C function
     char init_file_path[MAX_PATH_LENGTH];
@@ -301,38 +152,9 @@ int clear_stream_hls_segments(const char *stream_name) {
                 stream_hls_dir, strerror(errno));
     }
 
-    // Remove all .m3u8 playlist files using direct C functions
-    dir = opendir(stream_hls_dir);
-    if (dir) {
-        const struct dirent *entry;
-        int removed_count = 0;
-
-        while ((entry = readdir(dir)) != NULL) {
-            // Check if this is a .m3u8 file
-            if (strstr(entry->d_name, ".m3u8") != NULL) {
-                char file_path[MAX_PATH_LENGTH];
-                snprintf(file_path, sizeof(file_path), "%s/%s", stream_hls_dir, entry->d_name);
-
-                if (unlink(file_path) == 0) {
-                    removed_count++;
-                } else {
-                    log_warn("Failed to remove HLS .m3u8 file: %s (error: %s)",
-                            file_path, strerror(errno));
-                }
-            }
-        }
-
-        closedir(dir);
-        log_info("Removed %d HLS .m3u8 playlist files in %s", removed_count, stream_hls_dir);
-    } else {
-        log_warn("Failed to open directory to remove .m3u8 files: %s (error: %s)",
-                stream_hls_dir, strerror(errno));
-    }
-
-    // Ensure the directory has proper permissions using direct chmod
-    if (chmod(stream_hls_dir, 0755) != 0) {
-        log_warn("Failed to set permissions on directory: %s (error: %s)",
-                stream_hls_dir, strerror(errno));
+    // Ensure the directory has proper permissions
+    if (chmod_path(stream_hls_dir, 0755) != 0) {
+        log_warn("Failed to set permissions on directory: %s", stream_hls_dir);
     }
 
     return 0;
@@ -613,8 +435,8 @@ void cleanup_hls_directories(void) {
                 }
             }
 
-            // Ensure the directory has proper permissions using direct chmod
-            if (chmod(stream_hls_dir, 0755) != 0) {
+            // Ensure the directory has proper permissions
+            if (chmod_path(stream_hls_dir, 0755) != 0) {
                 log_warn("Failed to set permissions on directory: %s (error: %s)",
                         stream_hls_dir, strerror(errno));
             }
