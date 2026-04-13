@@ -14,6 +14,7 @@
 #include <unistd.h>
 
 #include "unity.h"
+#include "core/path_utils.h"
 #include "database/db_core.h"
 #include "database/db_recordings.h"
 #include "database/db_streams.h"
@@ -60,7 +61,7 @@ static void create_mp4_dir(void) {
     TEST_ASSERT_TRUE(root_len + 5 <= sizeof(dir));
     memcpy(dir, g_storage_root, root_len);
     memcpy(dir + root_len, "/mp4", 5);
-    TEST_ASSERT_TRUE(mkdir(dir, 0755) == 0 || access(dir, F_OK) == 0);
+    TEST_ASSERT_EQUAL_INT(0, ensure_dir(dir));
 }
 
 static void create_file(const char *path, size_t size) {
@@ -181,7 +182,7 @@ void test_apply_retention_policy_preserves_metadata_when_file_delete_fails(void)
     create_mp4_dir();
     add_stream_with_quota("blocked_cam", 1);
     mp4_path(blocked_path, sizeof(blocked_path), "quota-blocked.mp4");
-    TEST_ASSERT_EQUAL_INT(0, mkdir(blocked_path, 0755));
+    TEST_ASSERT_EQUAL_INT(0, ensure_dir(blocked_path));
 
     rec = make_recording("blocked_cam", blocked_path, now - 300, 2 * 1024 * 1024);
     TEST_ASSERT_NOT_EQUAL(0, add_recording_metadata(&rec));

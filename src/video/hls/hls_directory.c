@@ -67,7 +67,7 @@ int ensure_hls_directory(const char *output_dir, const char *stream_name) {
         for (char *p = temp_path + 1; *p; p++) {
             if (*p == '/') {
                 *p = '\0';
-                if (mkdir(temp_path, 0777) != 0 && errno != EEXIST) {
+                if (ensure_dir(temp_path)) {
                     log_warn("Failed to create parent directory: %s (error: %s)", temp_path, strerror(errno));
                 }
                 *p = '/';
@@ -75,7 +75,7 @@ int ensure_hls_directory(const char *output_dir, const char *stream_name) {
         }
 
         // Create the final directory
-        if (mkdir(temp_path, 0777) != 0 && errno != EEXIST) {
+        if (ensure_dir(temp_path)) {
             log_error("Failed to create output directory: %s (error: %s)", temp_path, strerror(errno));
             return -1;
         }
@@ -140,7 +140,7 @@ int ensure_hls_directory(const char *output_dir, const char *stream_name) {
         for (char *p = temp_path + 1; *p; p++) {
             if (*p == '/') {
                 *p = '\0';
-                if (mkdir(temp_path, 0755) != 0 && errno != EEXIST) {
+                if (ensure_dir(temp_path)) {
                     log_warn("Failed to create parent directory: %s (error: %s)", temp_path, strerror(errno));
                 }
                 *p = '/';
@@ -148,7 +148,7 @@ int ensure_hls_directory(const char *output_dir, const char *stream_name) {
         }
 
         // Create the final directory
-        if (mkdir(temp_path, 0755) != 0 && errno != EEXIST) {
+        if (ensure_dir(temp_path)) {
             log_warn("Failed to create parent directory: %s (error: %s)", temp_path, strerror(errno));
         }
 
@@ -172,7 +172,7 @@ int ensure_hls_directory(const char *output_dir, const char *stream_name) {
             for (char *p = retry_path + 1; *p; p++) {
                 if (*p == '/') {
                     *p = '\0';
-                    if (mkdir(retry_path, 0755) != 0 && errno != EEXIST) {
+                    if (ensure_dir(retry_path)) {
                         log_warn("Failed to create parent directory: %s (error: %s)", retry_path, strerror(errno));
                     } else {
                         // Set permissions (owner rwx, group/other rx)
@@ -183,7 +183,7 @@ int ensure_hls_directory(const char *output_dir, const char *stream_name) {
             }
 
             // Create the final directory
-            if (mkdir(retry_path, 0755) != 0 && errno != EEXIST) {
+            if (ensure_dir(retry_path)) {
                 log_warn("Failed to create parent directory: %s (error: %s)", retry_path, strerror(errno));
             }
 

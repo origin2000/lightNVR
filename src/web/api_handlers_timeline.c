@@ -25,6 +25,7 @@
 #define LOG_COMPONENT "RecordingsAPI"
 #include "core/logger.h"
 #include "core/config.h"
+#include "core/path_utils.h"
 #include "core/url_utils.h"
 #include "utils/strings.h"
 #include "database/database_manager.h"
@@ -586,9 +587,9 @@ int create_timeline_manifest(const timeline_segment_t *segments, int segment_cou
     snprintf(temp_dir, sizeof(temp_dir), "%s/timeline_manifests", g_config.storage_path);
     
     // Create directory if it doesn't exist
-    struct stat st = {0};
-    if (stat(temp_dir, &st) == -1) {
-        mkdir(temp_dir, 0755);
+    if (ensure_dir(temp_dir)) {
+        log_error("Could not create directory for timeline manifest %s: %s", temp_dir, strerror(errno));
+        return -1;
     }
     
     // Generate a unique manifest filename

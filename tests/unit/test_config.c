@@ -20,6 +20,7 @@
 #include "unity.h"
 #include "core/config.h"
 #include "core/logger.h"
+#include "core/path_utils.h"
 
 /* File-scope config used by most tests — setUp zeros it, tearDown frees
    the dynamically allocated streams array to keep ASan leak-free. */
@@ -389,7 +390,7 @@ void test_env_integer_whitespace_handling(void) {
             models_path, db_path, web_root);
     fclose(config_file);
 
-    TEST_ASSERT_EQUAL_INT(0, mkdir(web_root, 0755));
+    TEST_ASSERT_EQUAL_INT(0, ensure_dir(web_root));
 
     const char *previous_env = getenv("LIGHTNVR_WEB_PORT");
     char *saved_env = previous_env ? strdup(previous_env) : NULL;

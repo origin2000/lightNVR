@@ -166,17 +166,17 @@ static int mmap_strategy_init(pre_buffer_strategy_t *self, const buffer_config_t
     char safe_name[MAX_STREAM_NAME];
     sanitize_stream_name(data->stream_name, safe_name, sizeof(safe_name));
 
-    // Set up file path
-    snprintf(data->file_path, sizeof(data->file_path),
-             "%s/buffer/%s_prebuffer.mmap",
-             config->storage_path ? config->storage_path : g_config.storage_path,
-             safe_name);
-
     // Ensure directory exists
     char dir_path[MAX_PATH_LENGTH];
     snprintf(dir_path, sizeof(dir_path), "%s/buffer",
              config->storage_path ? config->storage_path : g_config.storage_path);
-    mkdir(dir_path, 0755);
+    if (ensure_dir(dir_path)) {
+        log_error("Failed to create directory for mmaps");
+        return -1;
+    }
+
+    // Set up file path
+    snprintf(data->file_path, sizeof(data->file_path), "%s/%s_prebuffer.mmap", dir_path, safe_name);
 
     pthread_mutex_init(&data->lock, NULL);
 

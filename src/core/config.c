@@ -16,6 +16,7 @@
 #include "ini.h"
 #include "core/config.h"
 #include "core/logger.h"
+#include "core/path_utils.h"
 #include "database/database_manager.h"
 #include "utils/strings.h"
 
@@ -471,59 +472,17 @@ void load_default_config(config_t *config) {
     config->mqtt_ha_snapshot_interval = 30;     // 30 seconds default
 }
 
-// Create directory if it doesn't exist
-static int create_directory(const char *path) {
-    struct stat st;
-    
-    // Check if directory already exists
-    if (stat(path, &st) == 0) {
-        if (S_ISDIR(st.st_mode)) {
-            return 0; // Directory exists
-        } else {
-            return -1; // Path exists but is not a directory
-        }
-    }
-    
-    // Create directory with permissions 0755
-    if (mkdir(path, 0755) != 0) {
-        if (errno == ENOENT) {
-            // Parent directory doesn't exist, try to create it recursively
-            char *parent_path = strdup(path);
-            if (!parent_path) {
-                return -1;
-            }
-            
-            const char *parent_dir = dirname(parent_path);
-            int ret = create_directory(parent_dir);
-            free(parent_path);
-            
-            if (ret != 0) {
-                return -1;
-            }
-            
-            // Try again to create the directory
-            if (mkdir(path, 0755) != 0) {
-                return -1;
-            }
-        } else {
-            return -1;
-        }
-    }
-    
-    return 0;
-}
-
 // Ensure all required directories exist
 static int ensure_directories(const config_t *config) {
     // Storage directory
-    if (create_directory(config->storage_path) != 0) {
+    if (mkdir_recursive(config->storage_path) != 0) {
         log_error("Failed to create storage directory: %s", config->storage_path);
         return -1;
     }
     
     // HLS storage directory if specified
     if (config->storage_path_hls[0] != '\0') {
-        if (create_directory(config->storage_path_hls) != 0) {
+        if (mkdir_recursive(config->storage_path_hls) != 0) {
             log_error("Failed to create HLS storage directory: %s", config->storage_path_hls);
             return -1;
         }
@@ -531,7 +490,7 @@ static int ensure_directories(const config_t *config) {
     }
     
     // Models directory
-    if (create_directory(config->models_path) != 0) {
+    if (mkdir_recursive(config->models_path) != 0) {
         log_error("Failed to create models directory: %s", config->models_path);
         return -1;
     }
@@ -539,25 +498,20 @@ static int ensure_directories(const config_t *config) {
     // Database directory
     // Some dirname implementations actually modify the path argument and
     // will segfault when passed a read-only const string.
-    char tmp_path[MAX_PATH_LENGTH];
-    safe_strcpy(tmp_path, config->db_path, MAX_PATH_LENGTH, 0);
-    char *dir = dirname(tmp_path);
-    if (create_directory(dir) != 0) {
-        log_error("Failed to create database directory: %s", dir);
+    if (ensure_path(config->db_path)) {
+        log_error("Failed to create database directory: %s", config->db_path);
         return -1;
     }
     
     // Web root directory
-    if (create_directory(config->web_root) != 0) {
+    if (mkdir_recursive(config->web_root) != 0) {
         log_error("Failed to create web root directory: %s", config->web_root);
         return -1;
     }
     
     // Log directory
-    safe_strcpy(tmp_path, config->log_file, MAX_PATH_LENGTH, 0);
-    dir = dirname(tmp_path);
-    if (create_directory(dir) != 0) {
-        log_error("Failed to create log directory: %s", dir);
+    if (ensure_path(config->log_file)) {
+        log_error("Failed to create log directory: %s", config->log_file);
         return -1;
     }
     
@@ -566,7 +520,7 @@ static int ensure_directories(const config_t *config) {
     if (cfg_log_fd < 0) {
         log_warn("Log file %s is not writable: %s", config->log_file, strerror(errno));
         // Try to fix log directory permissions
-        if (chmod(dir, 0755) != 0) {
+        if (chmod_parent(config->log_file, 0755)) {
             log_warn("Failed to change log directory permissions: %s", strerror(errno));
         }
     } else {
@@ -1452,7 +1406,7 @@ int save_config(const config_t *config, const char *path) {
         struct stat st;
         if (stat(dir_path, &st) != 0) {
             log_warn("Directory %s does not exist, attempting to create it", dir_path);
-            if (create_directory(dir_path) != 0) {
+            if (mkdir_recursive(dir_path) != 0) {
                 log_error("Failed to create directory %s: %s", dir_path, strerror(errno));
                 return -1;
             }

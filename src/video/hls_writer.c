@@ -19,6 +19,7 @@
 #include <libavutil/time.h>
 
 #include "core/logger.h"
+#include "core/path_utils.h"
 #include "utils/strings.h"
 #include "video/hls_writer.h"
 #include "video/detection_integration.h"
@@ -411,76 +412,16 @@ static int ensure_output_directory(hls_writer_t *writer) {
         safe_strcpy(writer->output_dir, safe_dir_path, MAX_PATH_LENGTH, 0);
     }
 
-    // Always use the safe path
-    dir_path = safe_dir_path;
-
-    // Check if directory exists
-    if (stat(dir_path, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        log_warn("HLS output directory does not exist or is not a directory: %s", dir_path);
-
-        // Create directory using direct C functions to handle paths with spaces
-        char temp_path[MAX_PATH_LENGTH];
-        safe_strcpy(temp_path, dir_path, MAX_PATH_LENGTH, 0);
-
-        // Create parent directories one by one
-        for (char *p = temp_path + 1; *p; p++) {
-            if (*p == '/') {
-                *p = '\0';
-                if (mkdir(temp_path, 0755) != 0 && errno != EEXIST) {
-                    log_warn("Failed to create parent directory: %s (error: %s)",
-                            temp_path, strerror(errno));
-                }
-                *p = '/';
-            }
-        }
-
-        // Create the final directory
-        if (mkdir(temp_path, 0755) != 0 && errno != EEXIST) {
-            log_error("Failed to create output directory: %s (error: %s)",
-                    temp_path, strerror(errno));
-            return -1;
-        }
-
-        log_info("Created HLS output directory: %s", dir_path);
-
-        // Set permissions via fd to avoid TOCTOU between mkdir and chmod
-        {
-            int dir_fd = open(dir_path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
-            if (dir_fd >= 0) {
-                if (fchmod(dir_fd, 0755) != 0) {
-                    log_warn("Failed to set permissions on directory: %s (error: %s)",
-                            dir_path, strerror(errno));
-                }
-                close(dir_fd);
-            }
-        }
+    // Create directory if necessary
+    if (mkdir_recursive(safe_dir_path)) {
+        log_error("Failed to create HLS output directory %s: %s", safe_dir_path, strerror(errno));
+        return -1;
     }
 
-    // Ensure the directory is writable. Use open()+fstatat()+fchmod() to avoid
-    // TOCTOU race between access() check and subsequent open() (#34).
-    {
-        int dir_fd = open(dir_path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
-        if (dir_fd < 0) {
-            log_error("Failed to open HLS output directory: %s (error: %s)", dir_path, strerror(errno));
-            return -1;
-        }
-
-        struct stat dir_st;
-        if (fstat(dir_fd, &dir_st) != 0) {
-            log_error("Failed to stat HLS output directory fd: %s (error: %s)", dir_path, strerror(errno));
-            close(dir_fd);
-            return -1;
-        }
-
-        if (!(dir_st.st_mode & S_IWUSR)) {
-            log_warn("HLS output directory may not be writable: %s, attempting permission fix", dir_path);
-            if (fchmod(dir_fd, 0755) != 0) {
-                log_warn("Failed to set permissions on directory: %s (error: %s)",
-                        dir_path, strerror(errno));
-            }
-        }
-
-        close(dir_fd);
+    // Ensure the directory is writable
+    if (chmod_path(safe_dir_path, 0755)) {
+        // Not fatal
+        log_warn("Failed to set permissions on directory: %s", safe_dir_path);
     }
 
     return 0;

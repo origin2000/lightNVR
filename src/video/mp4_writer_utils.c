@@ -33,6 +33,7 @@
 
 #include "core/config.h"
 #include "core/logger.h"
+#include "core/path_utils.h"
 #include "utils/strings.h"
 #include "video/mp4_writer.h"
 #include "video/mp4_writer_internal.h"
@@ -1016,7 +1017,7 @@ int mp4_writer_initialize(mp4_writer_t *writer, const AVPacket *pkt, const AVStr
     }
 
     // Set permissions to ensure it's writable
-    if (chmod_recursive(dir_path, 0777) != 0) {
+    if (chmod_path(dir_path, 0755)) {
         log_warn("Failed to set permissions: %s", dir_path);
     }
 
