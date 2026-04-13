@@ -351,91 +351,13 @@ static int check_and_kill_existing_instance(const char *pid_file) {
     return 0;
 }
 
-// Function to create PID file
-static int create_pid_file(const char *pid_file) {
-    char pid_str[16];
-    int fd;
-
-    // Make sure the directory exists
-    const char *last_slash = strrchr(pid_file, '/');
-    if (last_slash) {
-        char dir_path[MAX_PATH_LENGTH];
-        size_t dir_len = (size_t)(last_slash - pid_file);
-        safe_strcpy(dir_path, pid_file, MAX_PATH_LENGTH, dir_len);
-
-        // Create directory if it doesn't exist
-        struct stat st;
-        if (stat(dir_path, &st) != 0) {
-            if (mkdir(dir_path, 0755) != 0 && errno != EEXIST) {
-                log_error("Could not create directory for PID file: %s", strerror(errno));
-                return -1;
-            }
-        }
-    }
-
-    // Try to open the PID file with exclusive creation first
-    fd = open(pid_file, O_RDWR | O_CREAT | O_EXCL, 0644);
-    if (fd < 0 && errno == EEXIST) {
-        // File exists, try to open it normally
-        fd = open(pid_file, O_RDWR | O_CREAT, 0644);
-    }
-
-    if (fd < 0) {
-        log_error("Could not open PID file %s: %s", pid_file, strerror(errno));
-        return -1;
-    }
-
-    // Lock the PID file to prevent multiple instances
-    if (lockf(fd, F_TLOCK, 0) < 0) {
-        log_error("Could not lock PID file %s: %s", pid_file, strerror(errno));
-        close(fd);
-        return -1;
-    }
-
-    // Truncate the file to ensure we overwrite any existing content
-    if (ftruncate(fd, 0) < 0) {
-        log_warn("Could not truncate PID file: %s", strerror(errno));
-        // Continue anyway
-    }
-
-    // Write PID to file
-    sprintf(pid_str, "%d\n", getpid());
-    if (write(fd, pid_str, strlen(pid_str)) != strlen(pid_str)) {
-        log_error("Could not write to PID file %s: %s", pid_file, strerror(errno));
-        close(fd);
-        unlink(pid_file);  // Try to remove the file
-        return -1;
-    }
-
-    // Sync to ensure the PID is written to disk
-    fsync(fd);
-
-    // Keep file open to maintain lock
-    return fd;
-}
-
-// Function to remove PID file
-static void remove_pid_file(int fd, const char *pid_file) {
-    if (fd >= 0) {
-        // Release the lock by closing the file
-        close(fd);
-    }
-
-    // Try to remove the file
-    if (unlink(pid_file) != 0) {
-        log_warn("Failed to remove PID file %s: %s", pid_file, strerror(errno));
-    } else {
-        log_info("Successfully removed PID file %s", pid_file);
-    }
-}
-
 // Function to daemonize the process
 static int daemonize(const char *pid_file) {
-    int result = init_daemon(pid_file);
+    int fd = init_daemon(pid_file);
 
     // If daemon initialization failed, return error
-    if (result != 0) {
-        return result;
+    if (fd < 0) {
+        return -1;
     }
 
     // We're now in the child process, set daemon_mode flag
@@ -444,8 +366,8 @@ static int daemonize(const char *pid_file) {
     // Make sure the running flag is set to true
     running = true;
 
-    // Return success
-    return 0;
+    // Return locked PID fd
+    return fd;
 }
 
 // Function to check and ensure recording is active for streams that have recording enabled
@@ -667,14 +589,14 @@ int main(int argc, char *argv[]) {
     // Daemonize if requested. This needs to happen before launching any threads.
     if (daemon_mode) {
         log_info("Starting in daemon mode");
-        if (daemonize(config.pid_file) != 0) {
+        pid_fd = daemonize(config.pid_file);
+        if (pid_fd < 0) {
             log_error("Failed to daemonize");
             return EXIT_FAILURE;
         }
-        // In daemon mode, the PID file is handled by daemon.c
     } else {
-        // Create PID file (only for non-daemon mode)
-        pid_fd = create_pid_file(config.pid_file);
+        // Create PID file directly (only for non-daemon mode)
+        pid_fd = write_pid_file(config.pid_file);
         if (pid_fd < 0) {
             log_error("Failed to create PID file");
             return EXIT_FAILURE;
@@ -1634,14 +1556,8 @@ cleanup:
         pthread_sigmask(SIG_SETMASK, &old_mask, NULL);
     }
 
-    // Handle PID file cleanup based on mode
-    if (daemon_mode) {
-        // In daemon mode, call cleanup_daemon to handle the PID file
-        cleanup_daemon();
-    } else if (pid_fd >= 0) {
-        // In normal mode, remove the PID file directly
-        remove_pid_file(pid_fd, config.pid_file);
-    }
+    // Close (unlock) and delete the PID file
+    remove_pid_file(pid_fd, config.pid_file);
 
     log_info("Cleanup complete, shutting down");
 
