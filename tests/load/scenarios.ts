@@ -95,15 +95,6 @@ const ONVIF_API: Scenario[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// API — Motion (read-only)
-// ---------------------------------------------------------------------------
-
-const MOTION_API: Scenario[] = [
-  { name: 'Motion storage', method: 'GET', path: '/api/motion/storage',
-    tags: ['api', 'motion'], weight: 1, expectedStatus: [200, 401, 404] },
-];
-
-// ---------------------------------------------------------------------------
 // API — Timeline (read-only)
 // ---------------------------------------------------------------------------
 
@@ -136,7 +127,6 @@ export function getAllScenarios(config: LoadTestConfig): Scenario[] {
     ...RECORDINGS_API,
     ...SETTINGS_API,
     ...ONVIF_API,
-    ...MOTION_API,
     ...TIMELINE_API,
   ];
 }

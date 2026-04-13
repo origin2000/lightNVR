@@ -580,25 +580,8 @@ void handle_get_stream_full(const http_request_t *req, http_response_t *res) {
     }
     cJSON_AddItemToObject(response, "stream", stream_obj);
 
-    // Add motion configuration if available
-    motion_recording_config_t mcfg;
-    if (load_motion_config(stream_id, &mcfg) == 0) {
-        cJSON *motion_obj = cJSON_CreateObject();
-        if (motion_obj) {
-            cJSON_AddBoolToObject(motion_obj, "enabled", mcfg.enabled);
-            cJSON_AddNumberToObject(motion_obj, "pre_buffer_seconds", mcfg.pre_buffer_seconds);
-            cJSON_AddNumberToObject(motion_obj, "post_buffer_seconds", mcfg.post_buffer_seconds);
-            cJSON_AddNumberToObject(motion_obj, "max_file_duration", mcfg.max_file_duration);
-            cJSON_AddStringToObject(motion_obj, "codec", mcfg.codec);
-            cJSON_AddStringToObject(motion_obj, "quality", mcfg.quality);
-            cJSON_AddNumberToObject(motion_obj, "retention_days", mcfg.retention_days);
-            cJSON_AddItemToObject(response, "motion_config", motion_obj);
-        } else {
-            cJSON_AddNullToObject(response, "motion_config");
-        }
-    } else {
-        cJSON_AddNullToObject(response, "motion_config");
-    }
+    // Add obsolete motion config
+    cJSON_AddNullToObject(response, "motion_config");
 
     char *json_str = cJSON_PrintUnformatted(response);
     if (!json_str) {

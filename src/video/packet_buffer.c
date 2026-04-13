@@ -14,6 +14,7 @@
 #include <errno.h>
 
 #include "video/packet_buffer.h"
+#include "video/streams.h"
 #include "core/logger.h"
 #include "core/config.h"
 #include "core/path_utils.h"

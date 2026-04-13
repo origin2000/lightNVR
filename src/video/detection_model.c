@@ -354,9 +354,6 @@ detection_model_t load_detection_model(const char *model_path, float threshold) 
             m->threshold = threshold;
             safe_strcpy(m->path, model_path, MAX_PATH_LENGTH, 0);
             model = m;
-
-            // Initialize the API detection system
-            init_api_detection_system();
         }
     }
     else if (strcmp(model_type, MODEL_TYPE_ONVIF) == 0) {
@@ -369,8 +366,6 @@ detection_model_t load_detection_model(const char *model_path, float threshold) 
             safe_strcpy(m->path, model_path, MAX_PATH_LENGTH, 0);
             model = m;
 
-            // Initialize the ONVIF detection system
-            init_onvif_detection_system();
             log_info("ONVIF model created: %s", model_path);
         }
     }

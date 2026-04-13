@@ -8,7 +8,10 @@
 #include "video/onvif_detection.h"
 
 /**
- * Initialize the detection system
+ * Initialize the detection system.
+ * Initializes detection model, motion detection, api detection, onvif
+ * detection, and unified detection thread systems.
+ * Called by init_detection_integration(). 
  * 
  * @return 0 on success, non-zero on failure
  */

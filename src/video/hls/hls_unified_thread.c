@@ -1793,10 +1793,6 @@ void *hls_unified_thread_func(void *arg) {
     // This prevents accessing invalid memory during cleanup
     bool context_valid_for_exit = ctx_for_exit && !is_context_already_freed(ctx_for_exit) && !is_context_pending_deletion(ctx_for_exit);
 
-    // Store stream name in local buffer for logging even if context becomes invalid
-    char stream_name_buf[MAX_STREAM_NAME];
-    safe_strcpy(stream_name_buf, stream_name, MAX_STREAM_NAME, 0);
-
     // CRITICAL FIX: Ensure all resources are cleaned up before exiting
     // This is a safety measure in case we exited the loop without proper cleanup
     if (input_ctx != NULL || pkt != NULL) {
@@ -1865,7 +1861,7 @@ void *hls_unified_thread_func(void *arg) {
                     update_component_state(ctx_for_exit->shutdown_component_id, COMPONENT_STOPPED);
                 }
             } else {
-                log_warn("Context for stream %s is no longer valid, skipping connection_valid update", stream_name_buf);
+                log_warn("Context for stream %s is no longer valid, skipping connection_valid update", stream_name);
             }
 
             log_info("Updated component state to STOPPED for stream %s after loop exit", stream_name);
@@ -1893,20 +1889,20 @@ void *hls_unified_thread_func(void *arg) {
         }
     }
 
-    // Stream name is already stored in stream_name_buf
+    // Stream name is already stored in stream_name
 
     // CRITICAL FIX: Add safety checks before cleaning up resources
-    log_info("Cleaning up all resources for stream %s", stream_name_buf);
+    log_info("Cleaning up all resources for stream %s", stream_name);
 
     // CRITICAL FIX: Ensure all resources are cleaned up before exiting
     // This is a final safety check to prevent memory leaks
     if (input_ctx || pkt) {
-        log_info("Final cleanup of FFmpeg resources for stream %s", stream_name_buf);
+        log_info("Final cleanup of FFmpeg resources for stream %s", stream_name);
         if (input_ctx) {
-            log_debug("Cleaning up input context for stream %s", stream_name_buf);
+            log_debug("Cleaning up input context for stream %s", stream_name);
         }
         if (pkt) {
-            log_debug("Cleaning up packet for stream %s", stream_name_buf);
+            log_debug("Cleaning up packet for stream %s", stream_name);
         }
         // Clean up any remaining FFmpeg resources
         safe_cleanup_resources(&input_ctx, &pkt, NULL);
@@ -1929,7 +1925,7 @@ void *hls_unified_thread_func(void *arg) {
         writer_ptr = __atomic_load_n(&ctx_local->writer, __ATOMIC_SEQ_CST);
 
         if (writer_ptr) {
-            log_debug("Cleaning up HLS writer for stream %s", stream_name_buf);
+            log_debug("Cleaning up HLS writer for stream %s", stream_name);
 
             // CRITICAL FIX: Use atomic exchange to safely get and clear the writer pointer
             // This ensures that no other thread can access the writer after we've taken ownership of it
@@ -1947,7 +1943,7 @@ void *hls_unified_thread_func(void *arg) {
         shutdown_id = ctx_local->shutdown_component_id;
     } else {
         // This is expected during shutdown when multiple cleanup paths run
-        log_debug("Context for stream %s is no longer valid during cleanup (already cleaned up)", stream_name_buf);
+        log_debug("Context for stream %s is no longer valid during cleanup (already cleaned up)", stream_name);
     }
 
     // CRITICAL FIX: Add memory barrier before cleanup to ensure all threads see consistent state
@@ -1960,17 +1956,17 @@ void *hls_unified_thread_func(void *arg) {
     // No need to clear it again
 
     // CRITICAL FIX: Add additional safety checks before cleanup
-    log_info("About to clean up remaining resources for stream %s", stream_name_buf);
+    log_info("About to clean up remaining resources for stream %s", stream_name);
 
     // CRITICAL FIX: Add memory barrier before cleanup
     __sync_synchronize();
 
     // CRITICAL FIX: Only clean up the writer if it's still valid
     if (writer_to_cleanup) {
-        log_debug("Writer is valid for stream %s, cleaning up", stream_name_buf);
+        log_debug("Writer is valid for stream %s, cleaning up", stream_name);
 
         // Clean up the writer with additional try/catch-like protection
-        log_info("Closing HLS writer for stream %s", stream_name_buf);
+        log_info("Closing HLS writer for stream %s", stream_name);
 
         // Use a try/catch-like approach with signal handling to prevent crashes
         struct sigaction sa_old, sa_new;
@@ -1990,9 +1986,9 @@ void *hls_unified_thread_func(void *arg) {
         alarm(0);
         sigaction(SIGALRM, &sa_old, NULL);
 
-        log_info("Successfully closed HLS writer for stream %s", stream_name_buf);
+        log_info("Successfully closed HLS writer for stream %s", stream_name);
     } else {
-        log_debug("No writer to clean up for stream %s", stream_name_buf);
+        log_debug("No writer to clean up for stream %s", stream_name);
     }
 
     // Update component state in shutdown coordinator only if we have a valid ID
@@ -2000,19 +1996,19 @@ void *hls_unified_thread_func(void *arg) {
         // CRITICAL FIX: Ensure the component is marked as STOPPED in the shutdown coordinator
         // This is critical to prevent the shutdown coordinator from waiting indefinitely
         update_component_state(shutdown_id, COMPONENT_STOPPED);
-        log_info("Updated unified HLS thread %s state to STOPPED in shutdown coordinator", stream_name_buf);
+        log_info("Updated unified HLS thread %s state to STOPPED in shutdown coordinator", stream_name);
     }
 
     // CRITICAL FIX: Ensure the thread is marked as exited in the pending deletion list
     // This is a final safety check to prevent memory leaks and deadlocks
     if (ctx_local) {
         mark_thread_exited(ctx_local);
-        log_info("Final marking of thread as exited for stream %s", stream_name_buf);
+        log_info("Final marking of thread as exited for stream %s", stream_name);
     }
 
     // Unmark the stream as stopping to indicate we've completed our shutdown
-    unmark_stream_stopping(stream_name_buf);
-    log_info("Unmarked stream %s as stopping before thread exit", stream_name_buf);
+    unmark_stream_stopping(stream_name);
+    log_info("Unmarked stream %s as stopping before thread exit", stream_name);
 
     // CRITICAL FIX: Add additional safety checks before freeing the context
     if (ctx_local) {
@@ -2056,10 +2052,10 @@ void *hls_unified_thread_func(void *arg) {
         if (context_valid) {
             // CRITICAL FIX: Check if the context has already been freed
             if (is_context_already_freed(ctx_to_free)) {
-                log_warn("Context for stream %s has already been freed, skipping", stream_name_buf);
+                log_warn("Context for stream %s has already been freed, skipping", stream_name);
             } else {
                 // Free the context
-                log_info("Freeing context for stream %s", stream_name_buf);
+                log_info("Freeing context for stream %s", stream_name);
 
                 // Use a try/catch-like approach with signal handling to prevent crashes
                 struct sigaction sa_old, sa_new;
@@ -2090,17 +2086,17 @@ void *hls_unified_thread_func(void *arg) {
                 alarm(0);
                 sigaction(SIGALRM, &sa_old, NULL);
 
-                log_info("Successfully freed context for stream %s", stream_name_buf);
+                log_info("Successfully freed context for stream %s", stream_name);
             }
         } else {
-            log_debug("Skipping cleanup of potentially invalid context for stream %s (already cleaned up)", stream_name_buf);
+            log_debug("Skipping cleanup of potentially invalid context for stream %s (already cleaned up)", stream_name);
         }
     } else {
         // This is expected during shutdown when multiple cleanup paths run
-        log_debug("Context is NULL during cleanup for stream %s (already cleaned up)", stream_name_buf);
+        log_debug("Context is NULL during cleanup for stream %s (already cleaned up)", stream_name);
     }
 
-    log_info("Unified HLS thread for stream %s exited", stream_name_buf);
+    log_info("Unified HLS thread for stream %s exited", stream_name);
 
     // MEMORY LEAK FIX: Enhanced final FFmpeg resource cleanup
     // This is a comprehensive cleanup to ensure no FFmpeg resources are leaked
@@ -2117,7 +2113,7 @@ void *hls_unified_thread_func(void *arg) {
     alarm(1); // 1 second timeout
 
     if (input_ctx) {
-        log_warn("Input context still exists at thread exit for stream %s, forcing cleanup", stream_name_buf);
+        log_warn("Input context still exists at thread exit for stream %s, forcing cleanup", stream_name);
 
         // First try to close the input context properly
         // CRITICAL FIX: Use a local copy of the pointer to prevent race conditions
@@ -2129,7 +2125,7 @@ void *hls_unified_thread_func(void *arg) {
     }
 
     if (pkt) {
-        log_warn("Packet still exists at thread exit for stream %s, forcing cleanup", stream_name_buf);
+        log_warn("Packet still exists at thread exit for stream %s, forcing cleanup", stream_name);
 
         // CRITICAL FIX: Use a local copy of the pointer to prevent race conditions
         AVPacket *pkt_to_cleanup = pkt;
@@ -2150,7 +2146,7 @@ void *hls_unified_thread_func(void *arg) {
     // This is a more aggressive approach to ensure all memory is freed
     // We call this directly here to ensure it happens before the thread exits
     // CRITICAL FIX: Only call this if we're not in shutdown or during stream deletion to prevent segfaults
-    if (!is_shutdown_initiated() && !is_stream_stopping(stream_name_buf)) {
+    if (!is_shutdown_initiated() && !is_stream_stopping(stream_name)) {
         // Use a safer approach to release memory
         log_info("Using safer approach to release FFmpeg memory during thread exit");
 
@@ -2180,12 +2176,12 @@ void *hls_unified_thread_func(void *arg) {
         // Mark thread as exited to ensure proper cleanup
         mark_thread_exited(ctx_for_exit);
 
-        log_info("Thread for stream %s marked as STOPPED", stream_name_buf);
+        log_info("Thread for stream %s marked as STOPPED", stream_name);
     } else {
-        log_info("Context for stream %s is no longer valid, skipping final thread exit marking", stream_name_buf);
+        log_info("Context for stream %s is no longer valid, skipping final thread exit marking", stream_name);
     }
 
-    log_info("Unified HLS thread for stream %s has completed all cleanup steps", stream_name_buf);
+    log_info("Unified HLS thread for stream %s has completed all cleanup steps", stream_name);
     return NULL;
 }
 

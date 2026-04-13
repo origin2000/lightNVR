@@ -10,7 +10,8 @@
 extern bool use_stream_based_detection;
 
 /**
- * Initialize the detection integration system
+ * Initialize the detection integration system.
+ * Calls init_detection_system() among other things.
  * This should be called at startup
  *
  * @return 0 on success, non-zero on failure
@@ -29,12 +30,6 @@ void force_cleanup_sod_models(void);
  * This should be called when the application is exiting
  */
 void cleanup_detection_resources(void);
-
-/**
- * Cleanup ONVIF detection integration resources
- * This should be called when the application is exiting
- */
-void cleanup_onvif_detection_integration(void);
 
 /**
  * Get the number of active detections
