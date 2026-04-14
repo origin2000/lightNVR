@@ -566,7 +566,6 @@ int start_stream_with_state(stream_state_manager_t *state) {
         log_info("Stream '%s' is now running", state->name);
 
         // Initialize telemetry slot with configured FPS
-        metrics_get_slot(state->name);
         if (state->config.fps > 0) {
             metrics_set_configured_fps(state->name, (double)state->config.fps);
         }

@@ -58,6 +58,7 @@
 #include "database/db_streams.h"
 #include "core/url_utils.h"
 #include "storage/storage_manager_streams_cache.h"
+#include "telemetry/stream_metrics.h"
 
 // Reconnection settings
 #define BASE_RECONNECT_DELAY_MS 500
@@ -944,6 +945,8 @@ static void udt_update_stream_video_params(unified_detection_ctx_t *ctx,
                                            bool fps_is_provisional) {
     if (!ctx) return;
 
+    metrics_set_configured_fps(ctx->stream_name, det_fps);
+
     pthread_mutex_lock(&ctx->mutex);
     atomic_store(&ctx->fps_is_provisional, fps_is_provisional);
     if (fps_is_provisional) {
@@ -1303,8 +1306,8 @@ static int process_packet(unified_detection_ctx_t *ctx, AVPacket *pkt) {
 
                 // Release mutex before DB call to avoid holding it during I/O
                 pthread_mutex_unlock(&ctx->mutex);
-                update_stream_video_params(ctx->stream_name, cur_w, cur_h,
-                                           measured_fps, cur_codec);
+                udt_update_stream_video_params(ctx, cur_w, cur_h,
+                                               measured_fps, cur_codec, false);
                 goto stats_done;
             }
         }
@@ -1315,6 +1318,9 @@ stats_done:
     // Always add packets to circular buffer (for pre-detection content)
     // The buffer automatically evicts old packets when full
     packet_buffer_add_packet(ctx->packet_buffer, pkt, now);
+
+    // Record stream metrics
+    metrics_record_frame(ctx->stream_name, pkt->size, is_video);
 
     // If recording, write packet to MP4
     if (current_state == UDT_STATE_RECORDING || current_state == UDT_STATE_POST_BUFFER) {
@@ -1609,6 +1615,8 @@ static int udt_start_recording(unified_detection_ctx_t *ctx) {
         log_warn("[%s] Failed to add detection recording to database", ctx->stream_name);
     }
 
+    metrics_set_recording_active(ctx->stream_name, true);
+
     pthread_mutex_lock(&ctx->mutex);
     ctx->total_recordings++;
     pthread_mutex_unlock(&ctx->mutex);
@@ -1644,6 +1652,9 @@ static int udt_stop_recording(unified_detection_ctx_t *ctx) {
     if (stat(ctx->current_recording_path, &st) == 0) {
         file_size = st.st_size;
     }
+
+    metrics_set_recording_active(ctx->stream_name, false);
+    metrics_record_segment_complete(ctx->stream_name, start_time, end_time, file_size);
 
     // Close MP4 writer
     mp4_writer_close(ctx->mp4_writer);

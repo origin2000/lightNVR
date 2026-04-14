@@ -164,7 +164,7 @@ void handle_get_health(const http_request_t *req, http_response_t *res) {
     // Check for ?sparklines=true query parameter
     char sparklines_param[8] = {0};
     bool include_sparklines = false;
-    if (http_request_get_query_param(req, "sparklines", sparklines_param, sizeof(sparklines_param)) == 0) {
+    if (http_request_get_query_param(req, "sparklines", sparklines_param, sizeof(sparklines_param)) > 0) {
         include_sparklines = (strcmp(sparklines_param, "true") == 0 || strcmp(sparklines_param, "1") == 0);
     }
 

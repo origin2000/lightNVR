@@ -125,15 +125,6 @@ int metrics_init(int max_streams);
 void metrics_shutdown(void);
 
 /**
- * Get or create a metric slot for a stream.
- * Returns NULL if all slots are full and the name doesn't match any existing slot.
- *
- * @param stream_name Stream name
- * @return Pointer to the stream's metric slot, or NULL
- */
-stream_metrics_t *metrics_get_slot(const char *stream_name);
-
-/**
  * Release (deactivate) a metric slot for a stream
  *
  * @param stream_name Stream name

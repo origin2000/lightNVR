@@ -105,8 +105,8 @@ static void *sampler_thread_func(void *arg) {
                 if (dt > 0.0) {
                     uint64_t df = cur_frames - m->prev_frames_total;
                     uint64_t db = cur_bytes  - m->prev_bytes_received;
-                    m->current_fps        = (double)df / dt;
-                    m->current_bitrate_bps = ((double)db * 8.0) / dt;
+                    m->current_fps         = 0.5 * m->current_fps + 0.5 * (double)df / dt;
+                    m->current_bitrate_bps = 0.5 * m->current_bitrate_bps + 0.5 * ((double)db * 8.0) / dt;
                 }
             }
             m->prev_frames_total  = cur_frames;
@@ -121,7 +121,7 @@ static void *sampler_thread_func(void *arg) {
             /* --- Health status --- */
             time_t last_frame = (time_t)atomic_load(&m->last_frame_ts);
             double frame_age  = (last_frame > 0) ? difftime(now, last_frame) : 999.0;
-            double cfg_fps    = m->configured_fps > 0.0 ? m->configured_fps : 30.0;
+            double cfg_fps    = m->configured_fps;
 
             stream_health_status_t status;
             if (frame_age > STREAM_HEALTH_FRAME_TIMEOUT_DOWN) {
@@ -213,12 +213,13 @@ void metrics_shutdown(void) {
     log_info("Metrics subsystem shut down");
 }
 
-stream_metrics_t *metrics_get_slot(const char *stream_name) {
-    if (!g_initialized || !stream_name || !stream_name[0]) return NULL;
+// Allocate a new slot
+static int metrics_get_slot(const char *stream_name) {
+    if (!g_initialized || !stream_name || !stream_name[0]) return -1;
 
     while (1) {
         int idx = find_slot(stream_name);
-        if (idx < 0) return NULL;
+        if (idx < 0) return -1;
 
         stream_metrics_t *m = &g_metrics[idx];
         if (!m->active) {
@@ -254,7 +255,7 @@ stream_metrics_t *metrics_get_slot(const char *stream_name) {
                 atomic_store(&m->recording_gaps_total, 0);
                 log_info("Metrics slot %d allocated for stream '%s'", idx, stream_name);
                 pthread_rwlock_unlock(&m->lock);
-                return m;
+                return idx;
             }
             pthread_rwlock_unlock(&m->lock);
 
@@ -264,7 +265,7 @@ stream_metrics_t *metrics_get_slot(const char *stream_name) {
                 continue;
             }
         }
-        return m;
+        return idx;
     }
 }
 
@@ -284,14 +285,8 @@ void metrics_release_slot(const char *stream_name) {
 void metrics_record_frame(const char *stream_name, int bytes, bool is_video) {
     if (!g_initialized || !stream_name) return;
 
-    int idx = find_active_slot(stream_name);
-    if (idx < 0) {
-        /* Auto-allocate on first frame */
-        stream_metrics_t *slot = metrics_get_slot(stream_name);
-        if (!slot) return;
-        idx = find_active_slot(stream_name);
-        if (idx < 0) return;
-    }
+    int idx = metrics_get_slot(stream_name);
+    if (idx < 0) return;
 
     stream_metrics_t *m = &g_metrics[idx];
     if (is_video) {
@@ -303,14 +298,14 @@ void metrics_record_frame(const char *stream_name, int bytes, bool is_video) {
 
 void metrics_record_drop(const char *stream_name) {
     if (!g_initialized || !stream_name) return;
-    int idx = find_active_slot(stream_name);
+    int idx = metrics_get_slot(stream_name);
     if (idx < 0) return;
     atomic_fetch_add(&g_metrics[idx].frames_dropped, 1);
 }
 
 void metrics_record_error(const char *stream_name, const char *error_type) {
     if (!g_initialized || !stream_name || !error_type) return;
-    int idx = find_active_slot(stream_name);
+    int idx = metrics_get_slot(stream_name);
     if (idx < 0) return;
 
     stream_metrics_t *m = &g_metrics[idx];
@@ -327,7 +322,7 @@ void metrics_record_error(const char *stream_name, const char *error_type) {
 
 void metrics_record_reconnect(const char *stream_name) {
     if (!g_initialized || !stream_name) return;
-    int idx = find_active_slot(stream_name);
+    int idx = metrics_get_slot(stream_name);
     if (idx < 0) return;
     atomic_fetch_add(&g_metrics[idx].reconnects_total, 1);
 }
@@ -335,7 +330,7 @@ void metrics_record_reconnect(const char *stream_name) {
 void metrics_record_segment_complete(const char *stream_name, time_t start_time,
                                      time_t end_time, uint64_t bytes) {
     if (!g_initialized || !stream_name) return;
-    int idx = find_active_slot(stream_name);
+    int idx = metrics_get_slot(stream_name);
     if (idx < 0) return;
 
     stream_metrics_t *m = &g_metrics[idx];
@@ -361,23 +356,14 @@ void metrics_record_segment_complete(const char *stream_name, time_t start_time,
 
 void metrics_set_recording_active(const char *stream_name, bool active) {
     if (!g_initialized || !stream_name) return;
-    int idx = find_active_slot(stream_name);
-    if (idx < 0) {
-        if (active) {
-            stream_metrics_t *slot = metrics_get_slot(stream_name);
-            if (!slot) return;
-            idx = find_active_slot(stream_name);
-            if (idx < 0) return;
-        } else {
-            return;
-        }
-    }
+    int idx = metrics_get_slot(stream_name);
+    if (idx < 0) return;
     atomic_store(&g_metrics[idx].recording_active, active ? 1 : 0);
 }
 
 void metrics_set_connection_latency(const char *stream_name, double latency_ms) {
     if (!g_initialized || !stream_name) return;
-    int idx = find_active_slot(stream_name);
+    int idx = metrics_get_slot(stream_name);
     if (idx < 0) return;
     pthread_rwlock_wrlock(&g_metrics[idx].lock);
     g_metrics[idx].connection_latency_ms = latency_ms;
@@ -386,10 +372,10 @@ void metrics_set_connection_latency(const char *stream_name, double latency_ms) 
 
 void metrics_set_configured_fps(const char *stream_name, double fps) {
     if (!g_initialized || !stream_name) return;
-    int idx = find_active_slot(stream_name);
+    int idx = metrics_get_slot(stream_name);
     if (idx < 0) return;
     pthread_rwlock_wrlock(&g_metrics[idx].lock);
-    g_metrics[idx].configured_fps = fps > 0.0 ? fps : 30.0;
+    g_metrics[idx].configured_fps = fps;
     pthread_rwlock_unlock(&g_metrics[idx].lock);
 }
 
