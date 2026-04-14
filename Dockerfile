@@ -18,7 +18,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install build dependencies including Node.js and FFmpeg dev libraries
 # sid ships Go 1.26+/Node 22.x/FFmpeg 8.x; trixie ships Go 1.24+/Node 20.x/FFmpeg 7.x
-RUN apt-get update && apt-get install -y \
+#
+# Pre-install systemd-standalone-sysusers to satisfy the sysusers virtual
+# dependency without pulling in the full systemd package.  The full systemd
+# postinst crashes under QEMU ARM emulation (SIGSEGV in systemd 260.x),
+# breaking all cross-architecture builds.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends systemd-standalone-sysusers && \
+    apt-get install -y \
     git cmake build-essential pkg-config file \
     libavcodec-dev libavformat-dev libavutil-dev libswscale-dev \
     libcurl4-openssl-dev \
