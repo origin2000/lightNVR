@@ -1573,8 +1573,13 @@ stats_done:
             // lag calculations. If the stream is already known to be live,
             // allow an initial keyframe to enter the pre-buffer immediately so
             // we do not lose the first GOP window.
-            ctx->first_video_pts = pkt->pts;
-            ctx->first_video_pts_set = true;
+            if (pkt->pts != AV_NOPTS_VALUE) {
+                ctx->first_video_pts = pkt->pts;
+                ctx->first_video_pts_set = true;
+            }
+            // If the stream is already known to be live, allow an initial
+            // keyframe to enter the pre-buffer immediately so we do not
+            // lose the first GOP window.
             if (ctx->stream_is_live && is_keyframe) {
                 should_buffer = true;
             }
