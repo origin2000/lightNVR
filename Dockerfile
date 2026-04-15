@@ -4,6 +4,7 @@ ARG SQLITE_YEAR=2026
 ARG SQLITE_AUTOCONF_VERSION=3520000
 ARG LIBUV_VERSION=1.52.1
 ARG LLHTTP_VERSION=9.3.1
+ARG DEB_BUILD=false
 
 FROM debian:${DEBIAN_SUITE}-slim AS builder
 
@@ -12,6 +13,7 @@ ARG SQLITE_YEAR
 ARG SQLITE_AUTOCONF_VERSION
 ARG LIBUV_VERSION
 ARG LLHTTP_VERSION
+ARG DEB_BUILD
 
 # Set non-interactive mode
 ENV DEBIAN_FRONTEND=noninteractive
@@ -39,18 +41,40 @@ RUN apt-get update && \
     go version && \
     rm -rf /var/lib/apt/lists/*
 
-# Build upstream SQLite because Debian sid can lag the latest SQLite security fixes
-RUN cd /tmp && \
+# For .deb builds: use system dev packages instead of building from source.
+# This ensures the binary links against system SONAMEs so that libuv, libsqlite3,
+# and libllhttp can be proper package dependencies instead of bundled libraries.
+RUN if [ "$DEB_BUILD" = "true" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends \
+        libuv1-dev libsqlite3-dev libllhttp-dev && \
+      rm -rf /var/lib/apt/lists/* && \
+      ARCH=$(uname -m) && \
+      case $ARCH in \
+          x86_64) LIBDIR="/usr/lib/x86_64-linux-gnu" ;; \
+          aarch64) LIBDIR="/usr/lib/aarch64-linux-gnu" ;; \
+          armv7l) LIBDIR="/usr/lib/arm-linux-gnueabihf" ;; \
+          *) echo "Unsupported architecture: $ARCH"; exit 1 ;; \
+      esac && \
+      cp -a ${LIBDIR}/libuv.so* /usr/lib/ && \
+      cp -a ${LIBDIR}/libsqlite3.so* /usr/lib/ && \
+      cp -a ${LIBDIR}/libllhttp.so* /usr/lib/; \
+    fi
+
+# Build upstream SQLite (skipped for .deb builds which use system libsqlite3)
+RUN if [ "$DEB_BUILD" != "true" ]; then \
+    cd /tmp && \
     wget -q "https://www.sqlite.org/${SQLITE_YEAR}/sqlite-autoconf-${SQLITE_AUTOCONF_VERSION}.tar.gz" && \
     tar -xzf "sqlite-autoconf-${SQLITE_AUTOCONF_VERSION}.tar.gz" && \
     cd "sqlite-autoconf-${SQLITE_AUTOCONF_VERSION}" && \
     ./configure --prefix=/usr --disable-static && \
     make -j"$(nproc)" && \
     make install && \
-    sqlite3 --version
+    sqlite3 --version; \
+    fi
 
-# Build upstream libuv because distro packages can lag the latest stable release
-RUN cd /tmp && \
+# Build upstream libuv (skipped for .deb builds which use system libuv)
+RUN if [ "$DEB_BUILD" != "true" ]; then \
+    cd /tmp && \
     wget -q "https://github.com/libuv/libuv/archive/refs/tags/v${LIBUV_VERSION}.tar.gz" -O libuv.tar.gz && \
     tar -xzf libuv.tar.gz && \
     cd "libuv-${LIBUV_VERSION}" && \
@@ -65,10 +89,12 @@ RUN cd /tmp && \
         *) echo "Unsupported architecture: $ARCH"; exit 1 ;; \
     esac && \
     cp -a "$LIBUV_DIR"/libuv.so* /usr/lib/ && \
-    pkg-config --modversion libuv
+    pkg-config --modversion libuv; \
+    fi
 
-# Build upstream llhttp so container builds use the latest parser without relying on distro lag
-RUN mkdir -p /tmp/llhttp/include /tmp/llhttp/src /usr/include && \
+# Build upstream llhttp (skipped for .deb builds which use system libllhttp)
+RUN if [ "$DEB_BUILD" != "true" ]; then \
+    mkdir -p /tmp/llhttp/include /tmp/llhttp/src /usr/include && \
     wget -q "https://raw.githubusercontent.com/nodejs/llhttp/release/include/llhttp.h" -O /tmp/llhttp/include/llhttp.h && \
     wget -q "https://raw.githubusercontent.com/nodejs/llhttp/release/src/llhttp.c" -O /tmp/llhttp/src/llhttp.c && \
     wget -q "https://raw.githubusercontent.com/nodejs/llhttp/release/src/api.c" -O /tmp/llhttp/src/api.c && \
@@ -81,7 +107,8 @@ RUN mkdir -p /tmp/llhttp/include /tmp/llhttp/src /usr/include && \
     ln -sf /usr/lib/libllhttp.so.${LLHTTP_VERSION} /usr/lib/libllhttp.so && \
     install -m 644 /tmp/llhttp/include/llhttp.h /usr/include/llhttp.h && \
     printf 'prefix=/usr\nexec_prefix=${prefix}\nlibdir=${prefix}/lib\nincludedir=${prefix}/include\n\nName: libllhttp\nDescription: llhttp parser\nVersion: %s\nLibs: -L${libdir} -lllhttp\nCflags: -I${includedir}\n' "$LLHTTP_VERSION" > /usr/lib/pkgconfig/libllhttp.pc && \
-    pkg-config --modversion libllhttp
+    pkg-config --modversion libllhttp; \
+    fi
 
 # Fetch external dependencies
 RUN mkdir -p /opt/external && \

@@ -75,6 +75,7 @@ jobs:
           tags: lightnvr-pkg:local
           build-args: |
             DEBIAN_SUITE=${{ matrix.debian_suite }}
+            DEB_BUILD=true
 
       - name: Extract files and create .deb package
         run: |
@@ -105,17 +106,15 @@ jobs:
           docker cp "${CID}:/bin/lightnvr" "${PKG_DIR}/usr/bin/lightnvr"
           docker cp "${CID}:/bin/go2rtc"   "${PKG_DIR}/usr/bin/go2rtc"
 
-          # Custom-built libraries (bundle to guarantee ABI compatibility)
-          # Use docker cp to extract /usr/lib into a temp dir, then pick
-          # out only the bundled libraries we need.  This replaces the
-          # fragile "docker export | tar --wildcards" approach which broke
-          # when Docker/BuildKit changed the tar path prefix format.
+          # Bundle only libsod (not available as a system package).
+          # libuv, libllhttp, and libsqlite3 are declared as package
+          # dependencies and provided by the system at runtime.
           mkdir -p /tmp/lightnvr_libs
           docker cp "${CID}:/usr/lib/." /tmp/lightnvr_libs/
           echo "=== Bundled library candidates ==="
-          ls -la /tmp/lightnvr_libs/lib{uv,llhttp,sqlite3,sod}* 2>/dev/null || true
+          ls -la /tmp/lightnvr_libs/libsod* 2>/dev/null || true
 
-          for expected_lib in libuv libllhttp libsqlite3 libsod; do
+          for expected_lib in libsod; do
             found=0
             for f in /tmp/lightnvr_libs/${expected_lib}.so*; do
               # Only install real files, not symlinks (we recreate symlinks below)
@@ -133,21 +132,10 @@ jobs:
           done
           rm -rf /tmp/lightnvr_libs
 
-          # Recreate soname symlink chains inside the package directory
+          # Recreate soname symlink chains for libsod inside the package directory
           # (Docker COPY dereferences symlinks, so we must recreate them)
           (cd "${PKG_DIR}/usr/lib/lightnvr" && \
-            [ -f libsod.so.1.1.9 ]    && ln -sf libsod.so.1.1.9    libsod.so.1    && ln -sf libsod.so.1    libsod.so    || true; \
-            [ -f libuv.so.1.0.0  ]    && ln -sf libuv.so.1.0.0     libuv.so.1     && ln -sf libuv.so.1     libuv.so     || true; \
-            [ -f libllhttp.so.9.3.1 ] && ln -sf libllhttp.so.9.3.1 libllhttp.so.9 && ln -sf libllhttp.so.9 libllhttp.so || true)
-
-          # Find and symlink sqlite3 if extracted
-          SQLITE_FILE=$(find "${PKG_DIR}/usr/lib/lightnvr" -name 'libsqlite3.so.*' ! -type l | head -1)
-          if [ -n "${SQLITE_FILE}" ]; then
-            BASE=$(basename "${SQLITE_FILE}")
-            (cd "${PKG_DIR}/usr/lib/lightnvr" && \
-              ln -sf "${BASE}" libsqlite3.so.0 2>/dev/null || true && \
-              ln -sf libsqlite3.so.0 libsqlite3.so 2>/dev/null || true)
-          fi
+            [ -f libsod.so.1.1.9 ] && ln -sf libsod.so.1.1.9 libsod.so.1 && ln -sf libsod.so.1 libsod.so || true)
 
           # Web assets and migrations from the Docker image
           docker cp "${CID}:/var/lib/lightnvr/www/."          "${PKG_DIR}/var/lib/lightnvr/www/"
@@ -221,10 +209,12 @@ jobs:
           case "${DEBIAN_SUITE}" in
             sid)
               FFMPEG_DEPS="libavcodec62 | libavcodec-extra, libavformat62, libavutil60, libswscale9"
+              LLHTTP_DEP="libllhttp9.3"
               SUITE_NOTE="Note: This package targets Debian sid (unstable)."
               ;;
             trixie)
               FFMPEG_DEPS="libavcodec61 | libavcodec-extra, libavformat61, libavutil59, libswscale8"
+              LLHTTP_DEP="libllhttp9.2"
               SUITE_NOTE="Note: This package targets Debian 13 trixie (stable)."
               ;;
             *)
@@ -241,7 +231,7 @@ jobs:
           Architecture: ${DEB_ARCH}
           Maintainer: OpenSensor <support@opensensor.io>
           Installed-Size: ${INSTALLED_SIZE}
-          Depends: ffmpeg, ${FFMPEG_DEPS}, libcurl4t64 | libcurl4, libmbedtls21, libmosquitto1, libcjson1, procps
+          Depends: ffmpeg, ${FFMPEG_DEPS}, libuv1t64, libsqlite3-0, ${LLHTTP_DEP}, libcurl4t64 | libcurl4, libmbedtls21, libmosquitto1, libcjson1, procps
           Section: net
           Priority: optional
           Homepage: https://github.com/opensensor/lightNVR
