@@ -46,7 +46,7 @@ RUN apt-get update && \
 # and libllhttp can be proper package dependencies instead of bundled libraries.
 RUN if [ "$DEB_BUILD" = "true" ]; then \
       apt-get update && apt-get install -y --no-install-recommends \
-        libuv1-dev libsqlite3-dev libllhttp-dev && \
+        libuv1-dev libsqlite3-dev libllhttp-dev sqlite3 && \
       rm -rf /var/lib/apt/lists/* && \
       ARCH=$(uname -m) && \
       case $ARCH in \
