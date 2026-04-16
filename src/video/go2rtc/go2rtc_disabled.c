@@ -7,6 +7,7 @@
  * the disabled build link cleanly.
  */
 
+#include "video/go2rtc/go2rtc_api.h"
 #include "video/go2rtc/go2rtc_integration.h"
 #include "video/go2rtc/go2rtc_process.h"
 #include "video/go2rtc/go2rtc_snapshot.h"
@@ -15,6 +16,27 @@
 #include "video/mp4_recording.h"
 
 #define UNUSED(x) (void)(x)
+
+/* go2rtc_api stubs */
+bool go2rtc_api_init(const char *api_host, int api_port) { UNUSED(api_host); UNUSED(api_port); return false; }
+bool go2rtc_api_add_stream(const char *stream_id, const char *stream_url) { UNUSED(stream_id); UNUSED(stream_url); return false; }
+bool go2rtc_api_add_stream_multi(const char *stream_id, const char **sources, int num_sources) {
+    UNUSED(stream_id); UNUSED(sources); UNUSED(num_sources); return false;
+}
+bool go2rtc_api_remove_stream(const char *stream_id) { UNUSED(stream_id); return true; }
+bool go2rtc_api_stream_exists(const char *stream_id) { UNUSED(stream_id); return false; }
+bool go2rtc_api_get_webrtc_url(const char *stream_id, char *buffer, size_t buffer_size) {
+    UNUSED(stream_id); UNUSED(buffer); UNUSED(buffer_size); return false;
+}
+bool go2rtc_api_update_config(void) { return false; }
+bool go2rtc_api_get_server_info(int *rtsp_port) { UNUSED(rtsp_port); return false; }
+bool go2rtc_api_get_application_info(int *rtsp_port, char *version, size_t version_size,
+                                     char *revision, size_t revision_size) {
+    UNUSED(rtsp_port); UNUSED(version); UNUSED(version_size);
+    UNUSED(revision); UNUSED(revision_size); return false;
+}
+bool go2rtc_api_preload_stream(const char *stream_id) { UNUSED(stream_id); return false; }
+void go2rtc_api_cleanup(void) {}
 
 bool go2rtc_process_init(const char *binary_path, const char *config_dir, int api_port) {
     UNUSED(binary_path); UNUSED(config_dir); UNUSED(api_port); return false;
