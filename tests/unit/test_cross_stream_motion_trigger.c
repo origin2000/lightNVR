@@ -73,7 +73,7 @@ void tearDown(void) {}
  * ================================================================ */
 
 void test_process_motion_event_null_stream_returns_error(void) {
-    int rc = process_motion_event(NULL, true, time(NULL));
+    int rc = process_motion_event(NULL, true, time(NULL), false);
     TEST_ASSERT_NOT_EQUAL(0, rc);
 }
 
@@ -88,7 +88,7 @@ void test_process_motion_event_no_linked_streams(void) {
     stream_config_t src = make_stream("cam_fixed_solo", true);
     add_stream_config(&src);
 
-    int rc = process_motion_event("cam_fixed_solo", true, time(NULL));
+    int rc = process_motion_event("cam_fixed_solo", true, time(NULL), false);
     /* Primary event push may fail if motion recording system is not
      * enabled for this stream, but the cross-stream scan must not crash. */
     (void)rc;
@@ -114,7 +114,7 @@ void test_process_motion_event_propagates_to_linked_stream(void) {
     add_stream_config(&ptz);
 
     /* Trigger a motion-start event on the source stream */
-    int rc = process_motion_event("cam_fixed", true, time(NULL));
+    int rc = process_motion_event("cam_fixed", true, time(NULL), false);
     /* The propagation path (calloc/scan/push/free) must complete without crash.
      * push_event for the linked stream may fail if motion recording is not
      * initialized for cam_ptz, but we only assert no crash here. */
@@ -135,7 +135,7 @@ void test_process_motion_event_end_propagates_to_linked_stream(void) {
     add_stream_config(&ptz);
 
     /* Trigger motion-end */
-    int rc = process_motion_event("cam_fixed_end", false, time(NULL));
+    int rc = process_motion_event("cam_fixed_end", false, time(NULL), false);
     (void)rc;
     TEST_PASS();
 }
@@ -154,7 +154,7 @@ void test_process_motion_event_unregistered_source_no_crash(void) {
     add_stream_config(&ptz);
 
     /* Call for a totally different source — no linked streams should match */
-    int rc = process_motion_event("cam_other", true, time(NULL));
+    int rc = process_motion_event("cam_other", true, time(NULL), false);
     (void)rc;
     TEST_PASS();
 }

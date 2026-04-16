@@ -481,7 +481,7 @@ void handle_test_motion_event(const http_request_t *req, http_response_t *res) {
 
     // Trigger a motion event
     time_t now = time(NULL);
-    int rc = process_motion_event(stream_name, true, now);
+    int rc = process_motion_event(stream_name, true, now, false);
 
     // Build response
     cJSON *response = cJSON_CreateObject();

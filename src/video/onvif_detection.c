@@ -663,7 +663,7 @@ int detect_motion_onvif(const char *onvif_url, const char *username, const char 
             // Publish to MQTT and trigger motion recording if detections remain after filtering
             if (result->count > 0) {
                 mqtt_publish_detection(stream_name, result, timestamp);
-                process_motion_event(stream_name, true, timestamp);
+                process_motion_event(stream_name, true, timestamp, false);
             }
         } else {
             log_warn("No stream name provided, skipping database storage");
@@ -674,7 +674,7 @@ int detect_motion_onvif(const char *onvif_url, const char *username, const char 
 
         // Notify motion recording that motion has ended
         if (stream_name && stream_name[0] != '\0') {
-            process_motion_event(stream_name, false, time(NULL));
+            process_motion_event(stream_name, false, time(NULL), false);
         }
     }
 
