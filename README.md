@@ -23,7 +23,7 @@ LightNVR provides a lightweight yet powerful solution for recording and managing
 #### 🎯 Smart Detection & Recording
 - **Detection Zones**: Visual polygon-based zone editor for targeted object detection - define multiple zones per camera with custom class filters and confidence thresholds
 - **light-object-detect Integration**: Seamless integration with [light-object-detect](https://github.com/opensensor/light-object-detect) API for ONNX/TFLite-based object detection with zone filtering
-- **ONVIF Motion Recording**: Automated recording triggered by ONVIF motion detection events
+- **ONVIF Motion Events**: Automated recording triggered by ONVIF motion detection events
 - **Object Detection**: Optional SOD integration for motion and object detection (supports both RealNet and CNN models)
 
 #### 📺 Streaming & Playback
@@ -451,7 +451,6 @@ The configuration files will persist across container restarts and updates.
 - [go2rtc Integration](docs/GO2RTC_INTEGRATION.md)
 - [MQTT Integration](docs/MQTT_INTEGRATION.md)
 - [ONVIF Detection](docs/ONVIF_DETECTION.md)
-- [ONVIF Motion Recording](docs/ONVIF_MOTION_RECORDING.md)
 - [Motion Buffer System](docs/MOTION_BUFFER.md)
 - [SOD Integration](docs/SOD_INTEGRATION.md)
 

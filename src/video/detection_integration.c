@@ -16,13 +16,13 @@
 #include "video/stream_manager.h"
 #include "video/streams.h"
 #include "video/detection.h"
+#include "video/detection_model.h"
 #include "video/detection_result.h"
 #include "video/motion_detection.h"
 #include "video/motion_detection_wrapper.h"
 #include "video/sod_integration.h"
 #include "video/api_detection.h"
 #include "video/onvif_detection.h"
-#include "video/onvif_detection_integration.h"
 #include "video/onvif_motion_recording.h"
 #include "utils/memory.h"
 
@@ -66,45 +66,15 @@ int init_detection_integration(void) {
         return -1;
     }
 
-    // Initialize the unified detection system
-    if (init_unified_detection_system() != 0) {
-        log_error("Failed to initialize unified detection system");
+    // Initialize detection system
+    if (init_detection_system() != 0) {
+        log_error("Failed to initialize detection system");
         // This is a critical error
         free(active_detection_streams);
         active_detection_streams = NULL;
         return -1;
-    } else {
-        log_info("Unified detection system initialized");
     }
     
-    // Initialize the API detection system
-    if (init_api_detection_system() != 0) {
-        log_error("Failed to initialize API detection system");
-        // This is not a critical error, as we can still use other detection methods
-        log_warn("API detection will not be available");
-    } else {
-        log_info("API detection system initialized");
-    }
-    
-    // Initialize the ONVIF detection system
-    if (init_onvif_detection_integration() != 0) {
-        log_error("Failed to initialize ONVIF detection system");
-        // This is not a critical error, as we can still use other detection methods
-        log_warn("ONVIF detection will not be available");
-    } else {
-        log_info("ONVIF detection system initialized");
-        // ONVIF detection is now integrated with the existing detection thread system
-    }
-
-    // Initialize the ONVIF motion recording system
-    if (init_onvif_motion_recording() != 0) {
-        log_error("Failed to initialize ONVIF motion recording system");
-        // This is not a critical error
-        log_warn("ONVIF motion recording will not be available");
-    } else {
-        log_info("ONVIF motion recording system initialized");
-    }
-
     log_info("Detection integration initialized with %d max concurrent detections", max_detections);
     return 0;
 }
@@ -117,8 +87,6 @@ void force_cleanup_sod_models(void) {
     log_info("Forcing cleanup of all SOD models in global cache...");
 
     // Call the function to clean up the global model cache
-    // This function is defined in detection_model.c
-    extern void force_cleanup_model_cache(void);
     force_cleanup_model_cache();
 
     log_info("SOD model cleanup completed");
@@ -150,15 +118,6 @@ void cleanup_detection_resources(void) {
     // Shutdown the API detection system
     shutdown_api_detection_system();
     log_info("API detection system has shutdown");
-    
-    // Shutdown the ONVIF detection system
-    cleanup_onvif_detection_integration();
-    log_info("ONVIF detection system has shutdown");
-
-    // Shutdown the ONVIF motion recording system
-    cleanup_onvif_motion_recording();
-    log_info("ONVIF motion recording system has shutdown");
-
 }
 
 /**

@@ -253,14 +253,6 @@ export function StreamsView() {
     // Detection object filter defaults
     detectionObjectFilter: 'none',
     detectionObjectFilterList: '',
-    // Motion (ONVIF) recording defaults
-    motionRecordingEnabled: false,
-    motionPreBuffer: 5,
-    motionPostBuffer: 10,
-    motionMaxDuration: 300,
-    motionRetentionDays: 7,
-    motionCodec: 'h264',
-    motionQuality: 'medium',
     // PTZ control settings
     ptzEnabled: false,
     ptzMaxX: 0,
@@ -631,40 +623,10 @@ export function StreamsView() {
       streamData.is_deleted = false;
     }
 
-    // Use mutation to save stream and then handle motion config if applicable
+    // Use mutation to save stream
     const savedStreamName = streamData.name;
     saveStreamMutation.mutate(streamData, {
       onSuccess: async () => {
-        try {
-          if (currentStream.isOnvif) {
-            const motionUrl = `/api/motion/config/${encodeURIComponent(currentStream.name)}`;
-            if (currentStream.motionRecordingEnabled) {
-              const body = {
-                enabled: true,
-                pre_buffer_seconds: parseInt(currentStream.motionPreBuffer, 10),
-                post_buffer_seconds: parseInt(currentStream.motionPostBuffer, 10),
-                max_file_duration: parseInt(currentStream.motionMaxDuration, 10),
-                codec: currentStream.motionCodec,
-                quality: currentStream.motionQuality,
-                retention_days: parseInt(currentStream.motionRetentionDays, 10)
-              };
-              await fetchJSON(motionUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-                timeout: 15000
-              });
-            } else {
-              // Delete motion config if disabling
-              await fetchJSON(motionUrl, {
-                method: 'DELETE',
-                timeout: 15000
-              });
-            }
-          }
-        } catch (err) {
-          showStatusMessage(t('streams.motionConfigSaveFailed', { message: err.message }), 'error', 5000);
-        }
         // Ensure both list and details are refreshed after save
         await queryClient.invalidateQueries({ queryKey: ['stream-full', savedStreamName] });
         queryClient.invalidateQueries({ queryKey: ['streams'] });
@@ -695,26 +657,6 @@ export function StreamsView() {
       return;
     }
     try {
-      // Ensure the server has motion recording enabled with current UI settings
-      if (currentStream.motionRecordingEnabled) {
-        const motionUrl = `/api/motion/config/${encodeURIComponent(currentStream.name)}`;
-        const body = {
-          enabled: true,
-          pre_buffer_seconds: parseInt(currentStream.motionPreBuffer, 10),
-          post_buffer_seconds: parseInt(currentStream.motionPostBuffer, 10),
-          max_file_duration: parseInt(currentStream.motionMaxDuration, 10),
-          codec: currentStream.motionCodec,
-          quality: currentStream.motionQuality,
-          retention_days: parseInt(currentStream.motionRetentionDays, 10)
-        };
-        await fetchJSON(motionUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-          timeout: 10000
-        });
-      }
-
       // Now fire the test motion event
       const data = await fetchJSON(`/api/motion/test/${encodeURIComponent(currentStream.name)}`, {
         method: 'POST',
@@ -774,13 +716,6 @@ export function StreamsView() {
       postBuffer: 30,
       detectionObjectFilter: 'none',
       detectionObjectFilterList: '',
-      motionRecordingEnabled: false,
-      motionPreBuffer: 5,
-      motionPostBuffer: 10,
-      motionMaxDuration: 300,
-      motionRetentionDays: 7,
-      motionCodec: 'h264',
-      motionQuality: 'medium',
       ptzEnabled: false,
       ptzMaxX: 0,
       ptzMaxY: 0,
@@ -846,14 +781,6 @@ export function StreamsView() {
         detectionModel: stream.detection_model || '',
         recordAudio: stream.record_audio !== undefined ? stream.record_audio : true,
         backchannelEnabled: stream.backchannel_enabled !== undefined ? stream.backchannel_enabled : false,
-        // Motion config mapping
-        motionRecordingEnabled: motion ? !!motion.enabled : false,
-        motionPreBuffer: motion ? (motion.pre_buffer_seconds || 5) : 5,
-        motionPostBuffer: motion ? (motion.post_buffer_seconds || 10) : 10,
-        motionMaxDuration: motion ? (motion.max_file_duration || 300) : 300,
-        motionRetentionDays: motion ? (motion.retention_days || 7) : 7,
-        motionCodec: motion ? (motion.codec || 'h264') : 'h264',
-        motionQuality: motion ? (motion.quality || 'medium') : 'medium',
         // PTZ control settings
         ptzEnabled: stream.ptz_enabled !== undefined ? stream.ptz_enabled : false,
         ptzMaxX: stream.ptz_max_x || 0,
@@ -933,13 +860,6 @@ export function StreamsView() {
         detectionModel: stream.detection_model || '',
         recordAudio: stream.record_audio !== undefined ? stream.record_audio : true,
         backchannelEnabled: stream.backchannel_enabled !== undefined ? stream.backchannel_enabled : false,
-        motionRecordingEnabled: motion ? !!motion.enabled : false,
-        motionPreBuffer: motion ? (motion.pre_buffer_seconds || 5) : 5,
-        motionPostBuffer: motion ? (motion.post_buffer_seconds || 10) : 10,
-        motionMaxDuration: motion ? (motion.max_file_duration || 300) : 300,
-        motionRetentionDays: motion ? (motion.retention_days || 7) : 7,
-        motionCodec: motion ? (motion.codec || 'h264') : 'h264',
-        motionQuality: motion ? (motion.quality || 'medium') : 'medium',
         ptzEnabled: stream.ptz_enabled !== undefined ? stream.ptz_enabled : false,
         ptzMaxX: stream.ptz_max_x || 0,
         ptzMaxY: stream.ptz_max_y || 0,

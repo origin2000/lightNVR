@@ -175,20 +175,6 @@ The system handles overlapping motion events intelligently:
 
 ## Configuration
 
-### Per-Stream Configuration
-
-```c
-motion_recording_config_t config = {
-    .enabled = true,
-    .pre_buffer_seconds = 10,    // 10 seconds of pre-event video
-    .post_buffer_seconds = 15,   // 15 seconds after motion ends
-    .max_file_duration = 600,    // Max 10 minutes per file
-    .retention_days = 30
-};
-
-enable_motion_recording("camera_name", &config);
-```
-
 ### Buffer Modes
 
 - **BUFFER_MODE_MEMORY**: Store packets in RAM (default)

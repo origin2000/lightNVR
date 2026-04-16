@@ -716,30 +716,6 @@ Returns available detection models.
 
 ### Motion Recording
 
-#### Get Motion Config
-
-```
-GET /api/motion/config/{stream_name}
-```
-
-Returns motion recording configuration for a stream.
-
-#### Set Motion Config
-
-```
-POST /api/motion/config/{stream_name}
-```
-
-Creates or updates motion recording configuration.
-
-#### Delete Motion Config
-
-```
-DELETE /api/motion/config/{stream_name}
-```
-
-Deletes motion recording configuration for a stream.
-
 #### Test Motion Event
 
 ```
@@ -747,46 +723,6 @@ POST /api/motion/test/{stream_name}
 ```
 
 Triggers a test motion event for debugging.
-
-#### Get Motion Stats
-
-```
-GET /api/motion/stats/{stream_name}
-```
-
-Returns motion recording statistics.
-
-#### List Motion Recordings
-
-```
-GET /api/motion/recordings/{stream_name}
-```
-
-Returns motion-triggered recordings.
-
-#### Delete Motion Recording
-
-```
-DELETE /api/motion/recordings/{recording_id}
-```
-
-Deletes a motion recording.
-
-#### Motion Cleanup
-
-```
-POST /api/motion/cleanup
-```
-
-Triggers cleanup of expired motion recordings.
-
-#### Motion Storage
-
-```
-GET /api/motion/storage
-```
-
-Returns motion recording storage usage.
 
 ### HLS Streaming
 

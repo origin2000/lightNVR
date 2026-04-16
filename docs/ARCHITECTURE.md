@@ -168,7 +168,6 @@ Key files:
 - `src/video/sod_integration.c`: SOD library integration
 - `src/video/sod_realnet.c`: SOD RealNet face detection
 - `src/video/onvif_detection.c`: ONVIF event-based detection
-- `src/video/onvif_detection_integration.c`: ONVIF detection integration layer
 - `src/video/onvif_motion_recording.c`: ONVIF motion-triggered recording
 - `src/video/motion_detection.c`: Motion detection processing
 - `src/video/motion_storage_manager.c`: Motion recording storage management

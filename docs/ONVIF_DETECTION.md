@@ -66,9 +66,7 @@ Some cameras don't require authentication for ONVIF events. For these cameras, y
 The ONVIF detection feature is implemented in the following files:
 
 - `include/video/onvif_detection.h`: Header file for ONVIF detection
-- `include/video/onvif_detection_integration.h`: Header file for ONVIF detection integration
 - `src/video/onvif_detection.c`: Implementation of ONVIF detection
-- `src/video/onvif_detection_integration.c`: Integration with the detection system
 
 The implementation uses the following components:
 

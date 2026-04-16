@@ -753,20 +753,12 @@ int main(int argc, char *argv[]) {
     init_hls_streaming_backend();
     init_mp4_recording_backend();
 
-    // Initialize ONVIF motion recording system
-    if (init_onvif_motion_recording() != 0) {
-        log_error("Failed to initialize ONVIF motion recording system");
-    } else {
-        log_info("ONVIF motion recording system initialized successfully");
-    }
-
     // Initialize detection system
-    if (init_detection_system() != 0) {
+    if (init_detection_integration() != 0) {
         log_error("Failed to initialize detection system");
     } else {
         log_info("Detection system initialized successfully");
     }
-
 
     // Initialize detection stream system
     init_detection_stream_system();
@@ -1036,7 +1028,6 @@ int main(int argc, char *argv[]) {
     #endif
 
     check_and_ensure_services();
-    print_detection_stream_status();
     log_info("LightNVR initialized successfully");
 
     // Main loop
@@ -1369,10 +1360,6 @@ cleanup:
 
         // Brief wait for HLS streaming cleanup
         usleep(200000);  // 200ms (reduced from 1000ms)
-
-        // Clean up ONVIF motion recording system before MP4 backend
-        log_info("Cleaning up ONVIF motion recording system...");
-        cleanup_onvif_motion_recording();
 
         // Now clean up MP4 recording
         log_info("Cleaning up MP4 recording backend...");

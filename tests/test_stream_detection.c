@@ -24,20 +24,13 @@ int main(int argc, char **argv) {
     set_log_level(LOG_LEVEL_INFO);
     log_info("Starting unified detection test");
 
-    // Initialize detection model system
-    int m_ret = init_detection_model_system();
-    assert(m_ret == 0);
-    log_info("Detection model system initialized");
-
     // Initialize detection integration system
     int d_ret = init_detection_integration();
     assert(d_ret == 0);
-    log_info("Detection integration system initialized");
 
     // Initialize unified detection system
     int u_ret = init_unified_detection_system();
     assert(u_ret == 0);
-    log_info("Unified detection system initialized");
 
     // Check initial state - no threads running
     const char *stream_name = "test_stream";

@@ -108,28 +108,23 @@ static char *create_onvif_request(const char *username, const char *password, co
     return soap_request;
 }
 
-// Send ONVIF request and get response
-static char *send_onvif_request(const char *url, const char *username, const char *password, 
-                               const char *request_body, const char *service) {
+// Send ONVIF request to a full URL (bypassing the base URL + /onvif/ + service construction)
+static char *send_onvif_request_to_url(const char *full_url, const char *username,
+                                       const char *password, const char *request_body) {
     if (!initialized || !curl_handle) {
         log_error("ONVIF detection system not initialized");
         return NULL;
     }
 
-    pthread_mutex_lock(&curl_mutex);
-
-    // Create full URL
-    char full_url[512];
-    snprintf(full_url, sizeof(full_url), "%s/onvif/%s", url, service);
     log_info("ONVIF Detection: Sending request to %s", full_url);
 
-    // Create SOAP request
     char *soap_request = create_onvif_request(username, password, request_body);
     if (!soap_request) {
         log_error("Failed to create ONVIF request");
-        pthread_mutex_unlock(&curl_mutex);
         return NULL;
     }
+
+    pthread_mutex_lock(&curl_mutex);
 
     // Set up curl
     curl_easy_setopt(curl_handle, CURLOPT_URL, full_url);
@@ -170,7 +165,7 @@ static char *send_onvif_request(const char *url, const char *username, const cha
     curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &http_code);
 
     if (http_code != 200) {
-        log_error("ONVIF request failed with HTTP code %ld", http_code);
+        log_error("ONVIF request to %s failed with HTTP code %ld", full_url, http_code);
         if (chunk.size > 0) {
             onvif_log_soap_fault(chunk.memory, chunk.size, "ONVIF Detection");
         }
@@ -183,66 +178,19 @@ static char *send_onvif_request(const char *url, const char *username, const cha
     return chunk.memory;
 }
 
-// Send ONVIF request to a full URL (bypassing the base URL + /onvif/ + service construction)
-static char *send_onvif_request_to_url(const char *full_url, const char *username,
-                                       const char *password, const char *request_body) {
+// Send ONVIF request and get response
+static char *send_onvif_request(const char *url, const char *username, const char *password, 
+                               const char *request_body, const char *service) {
     if (!initialized || !curl_handle) {
         log_error("ONVIF detection system not initialized");
         return NULL;
     }
 
-    pthread_mutex_lock(&curl_mutex);
-    log_info("ONVIF Detection: Sending request to %s", full_url);
+    // Create full URL
+    char full_url[512];
+    snprintf(full_url, sizeof(full_url), "%s/onvif/%s", url, service);
 
-    char *soap_request = create_onvif_request(username, password, request_body);
-    if (!soap_request) {
-        log_error("Failed to create ONVIF request");
-        pthread_mutex_unlock(&curl_mutex);
-        return NULL;
-    }
-
-    curl_easy_setopt(curl_handle, CURLOPT_URL, full_url);
-    curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, soap_request);
-    curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDSIZE, strlen(soap_request));
-
-    struct curl_slist *headers = NULL;
-    headers = curl_slist_append(headers, "Content-Type: application/soap+xml; charset=utf-8");
-    curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers);
-
-    memory_struct_t chunk;
-    chunk.memory = malloc(1);
-    chunk.size = 0;
-
-    curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_memory_callback);
-    curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&chunk);
-    curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, 10);
-
-    CURLcode res = curl_easy_perform(curl_handle);
-    free(soap_request);
-    curl_slist_free_all(headers);
-
-    if (res != CURLE_OK) {
-        log_error("ONVIF Detection: curl_easy_perform() failed: %s", curl_easy_strerror(res));
-        free(chunk.memory);
-        pthread_mutex_unlock(&curl_mutex);
-        return NULL;
-    }
-
-    long http_code = 0;
-    curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &http_code);
-
-    if (http_code != 200) {
-        log_error("ONVIF request to %s failed with HTTP code %ld", full_url, http_code);
-        if (chunk.size > 0) {
-            onvif_log_soap_fault(chunk.memory, chunk.size, "ONVIF Detection");
-        }
-        free(chunk.memory);
-        pthread_mutex_unlock(&curl_mutex);
-        return NULL;
-    }
-
-    pthread_mutex_unlock(&curl_mutex);
-    return chunk.memory;
+    return send_onvif_request_to_url(full_url, username, password, request_body);
 }
 
 // Extract subscription address from response
@@ -482,6 +430,8 @@ int init_onvif_detection_system(void) {
         return 0;  // Already initialized and curl handle is valid
     }
 
+    pthread_mutex_lock(&curl_mutex);
+
     // If we have a curl handle but initialized is false, clean it up first
     if (curl_handle) {
         log_warn("ONVIF detection system has a curl handle but is marked as uninitialized, cleaning up");
@@ -492,6 +442,7 @@ int init_onvif_detection_system(void) {
     // Initialize curl global (thread-safe, idempotent)
     if (curl_init_global() != 0) {
         log_error("Failed to initialize curl global");
+        pthread_mutex_unlock(&curl_mutex);
         return -1;
     }
 
@@ -499,12 +450,17 @@ int init_onvif_detection_system(void) {
     if (!curl_handle) {
         log_error("Failed to initialize curl handle");
         // Note: Don't call curl_global_cleanup() here - it's managed centrally
+        pthread_mutex_unlock(&curl_mutex);
         return -1;
     }
 
+    pthread_mutex_unlock(&curl_mutex);
+
     // Initialize subscriptions
+    pthread_mutex_lock(&subscription_mutex);
     subscription_count = 0;
     memset(subscriptions, 0, sizeof(subscriptions));
+    pthread_mutex_unlock(&subscription_mutex);
 
     initialized = true;
     log_info("ONVIF detection system initialized successfully");
@@ -519,11 +475,13 @@ void shutdown_onvif_detection_system(void) {
              initialized ? "yes" : "no", (void*)curl_handle);
 
     // Cleanup curl handle if it exists
+    pthread_mutex_lock(&curl_mutex);
     if (curl_handle) {
         log_info("Cleaning up curl handle");
         curl_easy_cleanup(curl_handle);
         curl_handle = NULL;
     }
+    pthread_mutex_unlock(&curl_mutex);
 
     // Note: Don't call curl_global_cleanup() here - it's managed centrally in curl_init.c
     // The global cleanup will happen at program shutdown
@@ -542,25 +500,17 @@ int detect_motion_onvif(const char *onvif_url, const char *username, const char 
         log_info("ONVIF Detection: System shutdown in progress, skipping detection");
         return -1;
     }
-
-    // Thread safety for curl operations
-    pthread_mutex_lock(&curl_mutex);
     
     // Initialize result to empty at the beginning to prevent segmentation fault
     if (result) {
         memset(result, 0, sizeof(detection_result_t));
     } else {
         log_error("ONVIF Detection: NULL result pointer provided");
-        pthread_mutex_unlock(&curl_mutex);
         return -1;
     }
     
-    log_info("ONVIF Detection: Starting detection with URL: %s", onvif_url ? onvif_url : "NULL");
-    log_info("ONVIF Detection: Stream name: %s", stream_name ? stream_name : "NULL");
-
     if (!initialized || !curl_handle) {
         log_error("ONVIF detection system not initialized");
-        pthread_mutex_unlock(&curl_mutex);
         return -1;
     }
 
@@ -568,7 +518,6 @@ int detect_motion_onvif(const char *onvif_url, const char *username, const char 
     // cppcheck-suppress knownConditionTrueFalse
     if (!onvif_url || !username || !password || !result) {
         log_error("Invalid parameters for detect_motion_onvif (NULL pointers not allowed)");
-        pthread_mutex_unlock(&curl_mutex);
         return -1;
     }
 
@@ -579,8 +528,9 @@ int detect_motion_onvif(const char *onvif_url, const char *username, const char 
         log_info("ONVIF Detection: Using camera with authentication (username: %s)", username);
     }
 
-    // Get or create subscription
-    pthread_mutex_unlock(&curl_mutex); // Unlock before calling get_subscription which will lock again
+    log_info("ONVIF Detection: Starting detection with URL: %s", onvif_url);
+    log_info("ONVIF Detection: Stream name: %s", stream_name);
+
     onvif_subscription_t *subscription = get_subscription(onvif_url, username, password);
     if (!subscription) {
         log_error("Failed to get subscription for %s", onvif_url);

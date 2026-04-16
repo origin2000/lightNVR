@@ -175,9 +175,6 @@ int main(void) {
 
     g_config.max_streams = 16;
 
-    /* Initialize the ONVIF motion recording event queue so push_event works */
-    init_onvif_motion_recording();
-
     UNITY_BEGIN();
 
     RUN_TEST(test_process_motion_event_null_stream_returns_error);
@@ -188,7 +185,6 @@ int main(void) {
 
     int result = UNITY_END();
 
-    cleanup_onvif_motion_recording();
     shutdown_database();
     unlink(TEST_DB_PATH);
     return result;

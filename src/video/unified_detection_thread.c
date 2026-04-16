@@ -248,7 +248,6 @@ int init_unified_detection_system(void) {
     }
 
     system_initialized = true;
-    log_info("Unified detection system initialized! Address: %p", (void*)&system_initialized);
     pthread_mutex_unlock(&contexts_mutex);
 
     log_info("Unified detection system initialized");

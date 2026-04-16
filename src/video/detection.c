@@ -60,8 +60,6 @@ int init_detection_system(void) {
     int motion_ret = init_motion_detection_system();
     if (motion_ret != 0) {
         log_error("Failed to initialize motion detection system");
-    } else {
-        log_info("Motion detection system initialized");
     }
 
     // Initialize API detection system
@@ -69,8 +67,6 @@ int init_detection_system(void) {
     if (api_ret != 0) {
         log_error("Failed to initialize API detection system");
         log_warn("API detection will not be available");
-    } else {
-        log_info("API detection system initialized");
     }
 
     // Initialize ONVIF detection system
@@ -78,8 +74,6 @@ int init_detection_system(void) {
     if (onvif_ret != 0) {
         log_error("Failed to initialize ONVIF detection system");
         log_warn("ONVIF detection will not be available");
-    } else {
-        log_info("ONVIF detection system initialized");
     }
 
     // Initialize unified detection thread system
@@ -87,8 +81,6 @@ int init_detection_system(void) {
     if (unified_ret != 0) {
         log_error("Failed to initialize unified detection thread system");
         log_warn("Unified detection recording will not be available");
-    } else {
-        log_info("Unified detection thread system initialized");
     }
 
     log_info("Detection system initialized");
@@ -101,7 +93,6 @@ int init_detection_system(void) {
 void shutdown_detection_system(void) {
     // Shutdown unified detection thread system first (it may depend on models)
     shutdown_unified_detection_system();
-    log_info("Unified detection thread system shutdown");
 
     // Shutdown the model system
     shutdown_detection_model_system();
@@ -111,11 +102,9 @@ void shutdown_detection_system(void) {
 
     // Shutdown API detection system
     shutdown_api_detection_system();
-    log_info("API detection system shutdown");
 
     // Shutdown ONVIF detection system
     shutdown_onvif_detection_system();
-    log_info("ONVIF detection system shutdown");
 
     log_info("Detection system shutdown");
 }
