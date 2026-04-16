@@ -825,6 +825,7 @@ int process_motion_event(const char *stream_name, bool motion_detected, time_t t
     event.timestamp = timestamp;
     event.active = motion_detected;
     event.confidence = 1.0f;
+    event.is_propagated = is_propagated;
     safe_strcpy(event.event_type, "motion", sizeof(event.event_type), 0);
 
     // Push to event queue
